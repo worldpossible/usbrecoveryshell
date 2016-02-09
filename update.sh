@@ -31,10 +31,10 @@
 #	cd <USB-Drive-Root>
 #	git clone https://github.com/rachelproject/contentshell.git contentshell
 #
-VERSION="6"
+VERSION="1-2-16_v3"
 TIMESTAMP=$(date +"%b-%d-%Y-%H%M%Z")
 SCRIPT_ROOT="/boot/efi"
-METHOD="3" # 1=Recovery (DEFAULT), 2=Imager, 3=Format
+METHOD="1" # 1=Recovery (DEFAULT), 2=Imager, 3=Format
 
 exec 3>&1 4>&2
 trap 'exec 2>&4 1>&3' 0 1 2 3
