@@ -39,7 +39,8 @@ Anytime Wifi solid/flashing AMBER - FAILED Update script; check log file for inf
 2. Unzip the compressed image
 3. Burn the image to a 4GB (minimum) USB using the following command:
 ```bash
-sudo dd if=<path-to>/IntelCAP_RACHEL_USB-Multitool-<version-info>.img of=/dev/<your-device-ID> bs=1m <or 1M, depending on OS>```
+sudo dd if=<path-to>/IntelCAP_RACHEL_USB-Multitool-<version-info>.img of=/dev/<your-device-ID> bs=1m <or 1M, depending on OS>
+```
 4. On this USB, modify the "METHOD" variable in script “update.sh” (top-level of USB)
 5. Turn off the CAP
 6. Connect the recovery USB disk to the CAP
