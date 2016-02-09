@@ -6,7 +6,7 @@ This is the first script to run when the CAP starts up with the RACHEL Recovery 
 ## Default users
 - root ```root:Rachel+1```
 - KA Lite ```admin:Rachel+1```
-- 192.168.88.1 Admin (change order/hide of modules) ```root:racheL```
+- 192.168.88.1 Admin (change order/hide of modules) ```root:rachel```
 
 ## METHOD of Install:
 ##### "Recovery" for end user CAP recovery (METHOD 1)
