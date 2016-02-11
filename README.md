@@ -1,4 +1,4 @@
-# RACHEL USB "Multitool" Image
+# RACHEL Recovery USB Image
 
 ## Description:
 This is the first script to run when the CAP starts up with the RACHEL Recovery USB plugged in.  It will set the LED lights, install the saved partitions to the emmc, and then run 1 of 3 scenarios.  Which scenario runs is determined by the configuration file called "update.sh".  Open a text editor and modify the variable "METHOD" to 1 of 3 options outlined below.  A log file is also stored on the USB (called update.log).  It should provide more detailed information when you encounter problems.  Wireless AP installed is called "RACHEL".
