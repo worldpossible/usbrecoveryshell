@@ -94,7 +94,7 @@ format_disk () {
         echo; echo "[*] The partition table after format is as follows:"
         gdisk -l $1
     else
-        echo "[-] INFO:  The function format_disk did not run!"
+        echo "[-] INFO:  The function format_disk does not run using Method 1."
     fi
 }
 
