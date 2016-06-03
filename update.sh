@@ -31,17 +31,20 @@
 #	cd <USB-Drive-Root>
 #	git clone https://github.com/rachelproject/contentshell.git contentshell
 #
-version="1-2-16_v3"
+usbversion=20160601.1919 # To get current version - date +%Y%m%d.%H%M"1-2-16_v7a
+version="1-2-16_v7a"
 timestamp=$(date +"%b-%d-%Y-%H%M%Z")
 scriptRoot="/boot/efi"
 method="1" # 1=Recovery (DEFAULT), 2=Imager, 3=Format
+rachelPartition="/media/RACHEL"
 
 exec 3>&1 4>&2
 trap 'exec 2>&4 1>&3' 0 1 2 3
 exec 1> $scriptRoot/update.log 2>&1
 
-echo; echo ">>>>>>>>>>>>>>> RACHEL Recovery USB - Version $version - Started $(date) >>>>>>>>>>>>>>>"
-echo; echo "Bash Version:  $(echo $BASH_VERSION)"
+echo; echo ">>>>>>>>>>>>>>> RACHEL Recovery USB - Version $usbversion - Started $(date) >>>>>>>>>>>>>>>"
+echo "RACHEL/CAP Firmware Build:  $version"
+echo "Bash Version:  $(echo $BASH_VERSION)"
 echo "Multitool configured to run method:  $method"
 echo " -- 1=Recovery (DEFAULT), 2=Imager, 3=Format"
 
@@ -71,53 +74,70 @@ backupGPT(){
 	sgdisk -p /dev/sda
 	echo; echo "[*] Backing up GPT to $scriptRoot/sda-backup-$timestamp.gpt"
 	sgdisk -b $scriptRoot/rachel-files/gpt/sda-backup-$timestamp.gpt /dev/sda
+	echo; echo "[*] Removing all but the last three backup files"
+	cd $scriptRoot/rachel-files/gpt; ls -tp | grep -v '/$' | tail -n +4 | tr '\n' '\0' | xargs -0 rm --
 	echo "[+] Backup complete."
 }
 
 updateCore(){
-	echo; echo "[*] Copying RACHEL contentshell files to /dev/sda3"
-	cp -r $scriptRoot/rachel-files/contentshell /mnt/RACHEL/
-	cp $scriptRoot/rachel-files/*.* /mnt/RACHEL/contentshell/
-	cp $scriptRoot/rachel-files/art/*.* /mnt/RACHEL/contentshell/art/
-	echo; echo "[*] Copying RACHEL packages for offline update"
-	cp -r $scriptRoot/rachel-files/offlinepkgs /mnt/RACHEL/
+	echo; echo "[*] Mounting /dev/sda3"
+	mkdir -p $rachelPartition
+	mount /dev/sda3 $rachelPartition
+	echo; echo "[*] Copying RACHEL contentshell files to /dev/sda3 (RACHEL web root)"
+	cp -r $scriptRoot/rachel-files/contentshell $rachelPartition/rachel
+	cp $scriptRoot/rachel-files/*.* $rachelPartition/rachel/
+	cp $scriptRoot/rachel-files/art/*.* $rachelPartition/rachel/art/
+	echo; echo "[*] Copying RACHEL contentshell files to /dev/sda3 (backup)"
+	cp -r $scriptRoot/rachel-files/contentshell $rachelPartition/
+	cp $scriptRoot/rachel-files/*.* $rachelPartition/contentshell/
+	cp $scriptRoot/rachel-files/art/*.* $rachelPartition/contentshell/art/
+	echo; echo "[*] Copying RACHEL packages for offline update to /dev/sda3"
+	cp -r $scriptRoot/rachel-files/offlinepkgs $rachelPartition/
+	echo; echo "[*] Copying kalite database files to /dev/sda3"
+	mkdir -p $scriptRoot/rachel-files/kalitedb $rachelPartition/kalitedb
+	cp -r $scriptRoot/rachel-files/kalitedb/* $rachelPartition/kalitedb/
 	echo; echo "[*] Running phase 1 updates"
-	bash $scriptRoot/rachel-files/cap-rachel-configure.sh --usbrecovery
+	cp $scriptRoot/rachel-files/cap-rachel-configure.sh $rachelPartition/cap-rachel-configure.sh
+	bash $rachelPartition/cap-rachel-configure.sh --usbrecovery
 	commandStatus
 }
 
-echo; echo "[*] Method $method will now execute."
+checkForStagedFiles(){
+	mkdir -p $scriptRoot/rachel-files/staging $rachelPartition/staging
+	if [[ $(ls -A $scriptRoot/rachel-files/staging 2>/dev/null) ]]; then
+		cp -r $scriptRoot/rachel-files/staging/* $rachelPartition/staging/
+	fi
+}
+
+echo; echo "[*] Method $method will now execute"
 echo; echo "[*] Executing script:  $scriptRoot/copy_partitions_to_emmc.sh"
 $scriptRoot/copy_partitions_to_emmc.sh $scriptRoot
-
+# Backing up GPT
 backupGPT
 if [[ $method == 1 ]]; then
 	echo; echo "[*] Executing script:  $scriptRoot/init_content_hdd.sh, format option 0"
 	$scriptRoot/init_content_hdd.sh /dev/sda 0
 	commandStatus
-	echo; echo "[+] Ran method 1."
+	echo; echo "[+] Ran method 1"
 elif [[ $method == 2 ]]; then
 	commandStatus
-	echo; echo "[+] Ran method 2."
+	echo; echo "[+] Ran method 2"
 elif [[ $method == 3 ]]; then
 	echo; echo "[*] Executing script:  $scriptRoot/init_content_hdd.sh, format option 1"
 	$scriptRoot/init_content_hdd.sh /dev/sda 1
-	echo; echo "[*] Mounting /dev/sda3"
-	mkdir -p /mnt/RACHEL
-	mount /dev/sda3 /mnt/RACHEL
-	echo "[*] Copying RACHEL contentshell files to /dev/sda3"
-	cp -r $scriptRoot/rachel-files/contentshell /mnt/RACHEL/rachel
-	cp $scriptRoot/rachel-files/*.* /mnt/RACHEL/rachel/
-	cp $scriptRoot/rachel-files/art/*.* /mnt/RACHEL/rachel/art/
 	commandStatus
-	echo; echo "[+] Ran method 3."
+	echo; echo "[+] Ran method 3"
 fi
 
 # Copying contentshell and other package files to the CAP
+echo; echo "[*] Updating core files/folders"
 updateCore
 commandStatus
+echo; echo "[*] If needed, copying staged files from USB to CAP"
+checkForStagedFiles
+commandStatus
 
-echo; echo "[*] Copying log files to root of USB."
+echo; echo "[*] Copying log files to root of USB"
 cp -rf /var/log $scriptRoot/
 sync
 $scriptRoot/led_control.sh 3g off
