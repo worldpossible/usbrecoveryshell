@@ -31,7 +31,7 @@
 #	cd <USB-Drive-Root>
 #	git clone https://github.com/rachelproject/contentshell.git contentshell
 #
-usbversion=20160601.1919 # To get current version - date +%Y%m%d.%H%M"1-2-16_v7a
+usbversion=20160602.2353 # To get current version - date +%Y%m%d.%H%M"1-2-16_v7a
 version="1-2-16_v7a"
 timestamp=$(date +"%b-%d-%Y-%H%M%Z")
 scriptRoot="/boot/efi"
@@ -98,6 +98,7 @@ updateCore(){
 	cp -r $scriptRoot/rachel-files/kalitedb/* $rachelPartition/kalitedb/
 	echo; echo "[*] Running phase 1 updates"
 	cp $scriptRoot/rachel-files/cap-rachel-configure.sh $rachelPartition/cap-rachel-configure.sh
+	chmod +x $rachelPartition/cap-rachel-configure.sh
 	bash $rachelPartition/cap-rachel-configure.sh --usbrecovery
 	commandStatus
 }
