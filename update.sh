@@ -31,8 +31,8 @@
 #	cd <USB-Drive-Root>
 #	git clone https://github.com/rachelproject/contentshell.git contentshell
 #
-usbversion=20160602.2353 # To get current version - date +%Y%m%d.%H%M"1-2-16_v7a
-version="1-2-16_v7a"
+usbversion="20160921.2353" # To get current version - date +%Y%m%d.%H%M"
+version="1-2-16v9"
 timestamp=$(date +"%b-%d-%Y-%H%M%Z")
 scriptRoot="/boot/efi"
 method="1" # 1=Recovery (DEFAULT), 2=Imager, 3=Format
@@ -42,7 +42,7 @@ exec 3>&1 4>&2
 trap 'exec 2>&4 1>&3' 0 1 2 3
 exec 1> $scriptRoot/update.log 2>&1
 
-echo; echo ">>>>>>>>>>>>>>> RACHEL Recovery USB - Version $usbversion - Started $(date) >>>>>>>>>>>>>>>"
+echo; echo ">>>>>>>>>>>>>>> RACHEL Recovery USB - Version $usbversion - Started $(date) <<<<<<<<<<<<<<<"
 echo "RACHEL/CAP Firmware Build:  $version"
 echo "Bash Version:  $(echo $BASH_VERSION)"
 echo "Multitool configured to run method:  $method"
@@ -59,8 +59,8 @@ commandStatus(){
 	export exitCode="$?"
 	if [[ $exitCode == 0 ]]; then
 		echo "Command status:  OK"
-		$scriptRoot/led_control.sh breath off 
-		$scriptRoot/led_control.sh issue off 
+		$scriptRoot/led_control.sh breath off
+		$scriptRoot/led_control.sh issue off
 		$scriptRoot/led_control.sh normal on
 	else
 		echo "Command status:  FAIL"
@@ -85,22 +85,25 @@ updateCore(){
 	mount /dev/sda3 $rachelPartition
 	echo; echo "[*] Copying RACHEL contentshell files to /dev/sda3 (RACHEL web root)"
 	cp -r $scriptRoot/rachel-files/contentshell $rachelPartition/rachel
-	cp $scriptRoot/rachel-files/*.* $rachelPartition/rachel/
-	cp $scriptRoot/rachel-files/art/*.* $rachelPartition/rachel/art/
+	chmod +x $scriptRoot/rachel-files/contentshell/*.shtml
+#	cp $scriptRoot/rachel-files/*.* $rachelPartition/rachel/
+#	cp $scriptRoot/rachel-files/art/*.* $rachelPartition/rachel/art/
 	echo; echo "[*] Copying RACHEL contentshell files to /dev/sda3 (backup)"
 	cp -r $scriptRoot/rachel-files/contentshell $rachelPartition/
-	cp $scriptRoot/rachel-files/*.* $rachelPartition/contentshell/
-	cp $scriptRoot/rachel-files/art/*.* $rachelPartition/contentshell/art/
+	chmod +x $scriptRoot/rachel-files/contentshell/*.shtml
+#	cp $scriptRoot/rachel-files/*.* $rachelPartition/contentshell/
+#	cp $scriptRoot/rachel-files/art/*.* $rachelPartition/contentshell/art/
 	echo; echo "[*] Copying RACHEL packages for offline update to /dev/sda3"
 	cp -r $scriptRoot/rachel-files/offlinepkgs $rachelPartition/
-	echo; echo "[*] Copying kalite database files to /dev/sda3"
-	mkdir -p $scriptRoot/rachel-files/kalitedb $rachelPartition/kalitedb
-	cp -r $scriptRoot/rachel-files/kalitedb/* $rachelPartition/kalitedb/
+#	echo; echo "[*] Copying kalite database files to /dev/sda3"
+#	mkdir -p $scriptRoot/rachel-files/kalitedb $rachelPartition/kalitedb
+#	cp -r $scriptRoot/rachel-files/kalitedb/* $rachelPartition/kalitedb/
 	echo; echo "[*] Running phase 1 updates"
 	cp $scriptRoot/rachel-files/cap-rachel-configure.sh $rachelPartition/cap-rachel-configure.sh
 	chmod +x $rachelPartition/cap-rachel-configure.sh
-	bash $rachelPartition/cap-rachel-configure.sh --usbrecovery
-	commandStatus
+	bash $rachelPartition/cap-rachel-configure.sh --usbrecovery &> /dev/null
+	# Copy rachelinstaller version to disk
+	echo $version-$usbversion > $rachelPartition/rachelinstaller-version
 }
 
 checkForStagedFiles(){
@@ -133,15 +136,16 @@ fi
 # Copying contentshell and other package files to the CAP
 echo; echo "[*] Updating core files/folders"
 updateCore
-commandStatus
+echo; echo "[+] Core update complete"
 echo; echo "[*] If needed, copying staged files from USB to CAP"
 checkForStagedFiles
 commandStatus
 
-echo; echo "[*] Copying log files to root of USB"
-cp -rf /var/log $scriptRoot/
+# Disabled; not used
+#echo; echo "[*] Copying log files to root of USB"
+#cp -rf /var/log $scriptRoot/
 sync
 $scriptRoot/led_control.sh 3g off
 echo "[+] Done."
 
-echo; echo "<<<<<<<<<<<<<< RACHEL Recovery USB - Completed $(date) <<<<<<<<<<<<<<<<"
+echo; echo ">>>>>>>>>>>>>>> RACHEL Recovery USB - Completed $(date) <<<<<<<<<<<<<<<"

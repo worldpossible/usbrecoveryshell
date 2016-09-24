@@ -4,9 +4,9 @@
 # Modified by : Sam @ Hackers for Charity (hackersforcharity.org) and World Possible (worldpossible.org)
 #
 # Initialize the content disk as following layout:
-# - 20G for preload content
-# - 100G for teacher content
-# - 339G for RACHEL content
+# - 3G for preload content
+# - 17G for teacher content
+# - 439G for RACHEL content
 #
 
 SCRIPT_ROOT="/boot/efi"
@@ -53,18 +53,22 @@ create_disk_image () {
     # Part1: 20G for preloaded content
     echo; echo "[*] Create preloaded content partition."
     #sgdisk -n 1:2048:765460479 -c 1:"preloaded" -u 1:77777777-7777-7777-7777-777777777777 -t 1:8300 $1 # original
-    sgdisk -n 1:2048:+20G -c 1:"preloaded" -u 1:77777777-7777-7777-7777-777777777777 -t 1:8300 $1
+    #sgdisk -n 1:2048:+20G -c 1:"preloaded" -u 1:77777777-7777-7777-7777-777777777777 -t 1:8300 $1 # RACHEL 20GB
+    sgdisk -n 1:2048:+3G -c 1:"preloaded" -u 1:77777777-7777-7777-7777-777777777777 -t 1:8300 $1
     echo "[+] Done."
 
     # Part2: 100G for teacher content
     echo; echo "[*] Create teacher partition."
     #sgdisk -n 2:765460480:-1M -c 2:"uploaded" -u 2:88888888-8888-8888-8888-888888888888 -t 2:8300 $1 # original
-    sgdisk -n 2:21G:+100G -c 2:"uploaded" -u 2:88888888-8888-8888-8888-888888888888 -t 2:8300 $1
+    #sgdisk -n 2:21G:+100G -c 2:"uploaded" -u 2:88888888-8888-8888-8888-888888888888 -t 2:8300 $1 # RACHEL 100GB
+    sgdisk -n 2:6293504:+17G -c 2:"uploaded" -u 2:88888888-8888-8888-8888-888888888888 -t 2:8300 $1
     echo "[+] Done."
 
     # Part3: Remaining for RACHEL content
     echo; echo "[*] Create RACHEL partition."
-    sgdisk -n 3:122G:-1M -c 3:"RACHEL" -u 3:99999999-9999-9999-9999-999999999999 -t 3:8300 $1
+    #sgdisk -n 3:+122G:-1M -c 3:"RACHEL" -u 3:99999999-9999-9999-9999-999999999999 -t 3:8300 $1 # RACHEL 343.8GB
+    #sgdisk -n 3:255852544:-1M -c 3:"RACHEL" -u 3:99999999-9999-9999-9999-999999999999 -t 3:8300 $1 # RACHEL 343.8GB
+    sgdisk -n 3:41945088:-1M -c 3:"RACHEL" -u 3:99999999-9999-9999-9999-999999999999 -t 3:8300 $1
     echo "[+] Done."
 
     echo; echo "[*] The partition table is as follows:"
@@ -94,7 +98,7 @@ format_disk () {
         echo; echo "[*] The partition table after format is as follows:"
         gdisk -l $1
     else
-        echo "[-] INFO:  The function format_disk does not run using Method 1."
+        echo "[-] INFO:  The function format_disk was not requested to run."
     fi
 }
 

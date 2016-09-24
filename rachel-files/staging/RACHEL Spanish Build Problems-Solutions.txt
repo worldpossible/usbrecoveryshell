@@ -1,0 +1,110 @@
+Lesson Planner and Content Storage
+
+------------
+
+## Medline plus images are not showing
+- bad links reference /medlineplus/images instead of /modules/medline_plus-es/images
+find /media/RACHEL/rachel/modules/medline_plus-es/spanish -type f -print0 | xargs -0 sed -i -e 's/medlineplus\/images/modules\/medline_plus-es\/images/g'
+
+------------
+
+## Soluciones Prácticas - 404
+- 2 bad links in index.htmlf (removed "soluciones")
+- ensure both rachel index files are the same
+cp index.htmlf rachel-index.php 
+
+------------
+
+Adding all kiwix content:
+1 - mv zim file to /media/RACHEL/kiwix/data/library/
+mv wikibooks_es_all_2015-11.zim /media/RACHEL/kiwix/data/library/
+(maybe instead, we should symlink...that way the module can be updated via common scripts)
+ln -s /media/RACHEL/rachel/modules/<module-name>/<zim-name>.zim /media/RACHEL/kiwix/data/library
+
+2 - add to library and restart kiwix
+/var/kiwix/bin/kiwix-manage /media/RACHEL/kiwix/data/library/library.xml add /media/RACHEL/kiwix/data/library/wikibooks_es_all_2015-11.zim 
+killall /var/kiwix/bin/kiwix-serve
+/var/kiwix/bin/kiwix-serve --daemon --port=81 --library /media/RACHEL/kiwix/data/library/library.xml
+
+3 - copied example index.htmlf and edited file; created pic
+cp <example-index.htmlf> wikibooks-es/index.htmlf
+nano index.htmlf 
+
+4- ensure both rachel index files are the same
+cp index.htmlf rachel-index.php 
+
+------------
+
+GCF2015-es
+- links to videos are direct to youtube (not stored locally)
+
+1 - install youtube-dl
+sudo curl https://yt-dl.org/latest/youtube-dl -o /usr/local/bin/youtube-dl
+sudo chmod a+rx /usr/local/bin/youtube-dl
+
+2 - identify videos in files
+grep -r "www.youtube.com/embed" ./
+
+3 - pull video-ids from file
+awk -v FS="?" '{ print $1 }' youtube-links.txt | awk -v FS="/" '{ print $NF }' > youtube-video-ids.txt
+
+4 - download videos to folder youtube-videos
+youtube-dl --embed-subs --embed-thumbnail -a ./youtube-video-ids.txt -f 18 -o './youtube-videos/%(id)s.%(ext)s'
+
+Help -> http://askubuntu.com/questions/486297/how-to-select-video-quality-from-youtube-dl
+
+
+grep -lr "www.youtube.com/embed" './'
+grep -r "youtube-videos" './' | grep -e "?rel=0"
+
+FIX the youtube links:
+grep -rnl './' -e "http://www.youtube.com/embed" | xargs -i@ sed -i 's/http:\/\/www.youtube.com\/embed/\/modules\/GCF2015-es\/youtube-videos/g' @
+grep -rnl './' -e "?rel=0" | xargs -i@ sed -i 's/?rel=0/.mp4/g' @
+grep -rnl './' -e "&autoplay=1" | xargs -i@ sed -i 's/&autoplay=1//g' @
+
+PROBLEM (the swf files are not present for the exercises), example:
+/files/course/ingles_intermedio/interactive/contar_estampillas/engage.swf
+
+root@WRTD-303N-Server:/media/RACHEL/rachel/modules# du -h -s ./*
+944M    ./ap_didact_es
+116M    ./asst_medical
+701M    ./bibliofilo-es
+7.6G    ./biblioteca-es
+3.2G    ./ck12
+476M    ./cnbguatemala-es
+1.8G    ./ebooks-en
+276M    ./ebooks-es
+142M    ./edison
+12G     ./GCF2015
+2.8G    ./GCF2015-es
+2.0G    ./guatemala-es
+56M     ./guias_es
+762M    ./hesperian_health
+80M     ./hesperian_health-es
+29M     ./iicba
+395M    ./infonet
+120K    ./kalite-es
+37M     ./local_content-es
+241M    ./math_expression
+147M    ./medline_plus
+156M    ./medline_plus-es
+9.1M    ./musictheory
+131M    ./olpc
+626M    ./PhET
+5.7M    ./powertyping
+1.1G    ./practical_action
+6.2G    ./radiolab
+4.0K    ./README.txt
+254M    ./scratch
+1.2G    ./soluciones_es
+88G     ./TED
+2.4M    ./understanding_algebra
+24M     ./vedoque-es
+32K     ./wikibooks-es
+6.0G    ./wikipedia_for_schools
+6.1G    ./wikipedia_for_schools-es
+28K     ./wikisource-es
+28K     ./wikiversity-es
+28K     ./wikivoyage-es
+32K     ./wiktionary-es
+155M    ./windows_apps
