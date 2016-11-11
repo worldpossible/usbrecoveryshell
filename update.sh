@@ -31,29 +31,12 @@
 #	cd <USB-Drive-Root>
 #	git clone https://github.com/rachelproject/contentshell.git contentshell
 #
-usbversion="20160921.2353" # To get current version - date +%Y%m%d.%H%M"
-version="1-2-16v9"
+usbCreated="20161111.1459"
+usbVersion="1-2-16_kaliteDirMove"
 timestamp=$(date +"%b-%d-%Y-%H%M%Z")
 scriptRoot="/boot/efi"
-method="1" # 1=Recovery (DEFAULT), 2=Imager, 3=Format
+method="4" # 1=Recovery (DEFAULT), 2=Imager, 3=Format
 rachelPartition="/media/RACHEL"
-
-exec 3>&1 4>&2
-trap 'exec 2>&4 1>&3' 0 1 2 3
-exec 1> $scriptRoot/update.log 2>&1
-
-echo; echo ">>>>>>>>>>>>>>> RACHEL Recovery USB - Version $usbversion - Started $(date) <<<<<<<<<<<<<<<"
-echo "RACHEL/CAP Firmware Build:  $version"
-echo "Bash Version:  $(echo $BASH_VERSION)"
-echo "Multitool configured to run method:  $method"
-echo " -- 1=Recovery (DEFAULT), 2=Imager, 3=Format"
-
-echo; echo "[*] Configuring LEDs."
-$scriptRoot/led_control.sh normal off
-$scriptRoot/led_control.sh breath on
-#$scriptRoot/led_control.sh issue on
-$scriptRoot/led_control.sh 3g on
-echo "[+] Done."
 
 commandStatus(){
 	export exitCode="$?"
@@ -85,12 +68,12 @@ updateCore(){
 	mount /dev/sda3 $rachelPartition
 	echo; echo "[*] Copying RACHEL contentshell files to /dev/sda3 (RACHEL web root)"
 	cp -r $scriptRoot/rachel-files/contentshell $rachelPartition/rachel
-	chmod +x $scriptRoot/rachel-files/contentshell/*.shtml
+	chmod +x $rachelPartition/rachel/*.shtml
 #	cp $scriptRoot/rachel-files/*.* $rachelPartition/rachel/
 #	cp $scriptRoot/rachel-files/art/*.* $rachelPartition/rachel/art/
 	echo; echo "[*] Copying RACHEL contentshell files to /dev/sda3 (backup)"
 	cp -r $scriptRoot/rachel-files/contentshell $rachelPartition/
-	chmod +x $scriptRoot/rachel-files/contentshell/*.shtml
+	chmod +x $rachelPartition/contentshell/*.shtml
 #	cp $scriptRoot/rachel-files/*.* $rachelPartition/contentshell/
 #	cp $scriptRoot/rachel-files/art/*.* $rachelPartition/contentshell/art/
 	echo; echo "[*] Copying RACHEL packages for offline update to /dev/sda3"
@@ -113,35 +96,84 @@ checkForStagedFiles(){
 	fi
 }
 
+exec 3>&1 4>&2
+trap 'exec 2>&4 1>&3' 0 1 2 3
+exec 1> $scriptRoot/update.log 2>&1
+
+echo; echo ">>>>>>>>>>>>>>> RACHEL Recovery USB - Version $usbversion - Started $(date) <<<<<<<<<<<<<<<"
+echo "RACHEL/CAP Firmware Build:  $version"
+echo "Bash Version:  $(echo $BASH_VERSION)"
+echo "Multitool configured to run method:  $method"
+echo " -- 1=Recovery (DEFAULT), 2=Imager, 3=Format"
+
+echo; echo "[*] Configuring LEDs."
+$scriptRoot/led_control.sh normal off
+$scriptRoot/led_control.sh breath on
+#$scriptRoot/led_control.sh issue on
+$scriptRoot/led_control.sh 3g on
+echo "[+] Done."
+
 echo; echo "[*] Method $method will now execute"
-echo; echo "[*] Executing script:  $scriptRoot/copy_partitions_to_emmc.sh"
-$scriptRoot/copy_partitions_to_emmc.sh $scriptRoot
-# Backing up GPT
-backupGPT
-if [[ $method == 1 ]]; then
-	echo; echo "[*] Executing script:  $scriptRoot/init_content_hdd.sh, format option 0"
-	$scriptRoot/init_content_hdd.sh /dev/sda 0
+if [[ $method != 4 ]]; then
+	echo; echo "[*] Executing script:  $scriptRoot/copy_partitions_to_emmc.sh"
+	$scriptRoot/copy_partitions_to_emmc.sh $scriptRoot
+	# Backing up GPT
+	backupGPT
+	if [[ $method == 1 ]]; then
+		echo; echo "[*] Executing script:  $scriptRoot/init_content_hdd.sh, format option 0"
+		$scriptRoot/init_content_hdd.sh /dev/sda 0
+		commandStatus
+		echo; echo "[+] Ran method 1"
+	elif [[ $method == 2 ]]; then
+		commandStatus
+		echo; echo "[+] Ran method 2"
+	elif [[ $method == 3 ]]; then
+		echo; echo "[*] Executing script:  $scriptRoot/init_content_hdd.sh, format option 1"
+		$scriptRoot/init_content_hdd.sh /dev/sda 1
+		commandStatus
+		echo; echo "[+] Ran method 3"
+	fi
+
+	# Copying contentshell and other package files to the CAP
+	echo; echo "[*] Updating core files/folders"
+	updateCore
+	echo; echo "[+] Core update complete"
+	echo; echo "[*] If needed, copying staged files from USB to CAP"
+	checkForStagedFiles
 	commandStatus
-	echo; echo "[+] Ran method 1"
-elif [[ $method == 2 ]]; then
-	commandStatus
-	echo; echo "[+] Ran method 2"
-elif [[ $method == 3 ]]; then
-	echo; echo "[*] Executing script:  $scriptRoot/init_content_hdd.sh, format option 1"
-	$scriptRoot/init_content_hdd.sh /dev/sda 1
-	commandStatus
-	echo; echo "[+] Ran method 3"
+else
+	echo; echo "[*] Mounting /dev/mmcblk0p4 to /tmp/cap"
+	mkdir -p /tmp/cap
+	mount /dev/mmcblk0p4 /tmp/cap
+#	echo; echo "[*] ls /tmp/cap"
+#	ls -la /tmp/cap
+#	echo; echo "[*] ls /root/.kalite"
+#	rm -rf /root/.kalite
+	echo; echo "[*] Mounting /dev/sda3"
+	mkdir -p $rachelPartition
+	mount /dev/sda3 $rachelPartition
+	echo; echo "[*] Before copying KA Lite folder - $rachelPartition"
+	ls -la $rachelPartition
+	echo; echo "[*] Copying .kalite dir to /media/RACHEL"
+	cp -r /tmp/cap/root/.kalite $rachelPartition/.kalite-backup
+	mv /tmp/cap/root/.kalite $rachelPartition/
+	echo; echo "[*] After copying KA Lite folder - $rachelPartition (should be .kalite and .kalite-backup"
+	ls -la $rachelPartition
+	echo; echo "[*] Symlinking /root/.kalite to /media/RACHEL/.kalite"
+	ln -s $rachelPartition/.kalite /tmp/cap/root/.kalite
+	echo; echo "[*] Symlinking complete - /root"
+	ls -la /tmp/cap/root
+	sleep 2
+	umount /tmp/cap
+	sleep 2
+	rmdir /tmp/cap
+	$scriptRoot/led_control.sh breath off
+	$scriptRoot/led_control.sh normal on
+	$scriptRoot/led_control.sh 3g off
+	shutdown -h now
 fi
 
-# Copying contentshell and other package files to the CAP
-echo; echo "[*] Updating core files/folders"
-updateCore
-echo; echo "[+] Core update complete"
-echo; echo "[*] If needed, copying staged files from USB to CAP"
-checkForStagedFiles
-commandStatus
-
-# Disabled; not used
+# Disabled copy of logs; not used
 #echo; echo "[*] Copying log files to root of USB"
 #cp -rf /var/log $scriptRoot/
 sync
