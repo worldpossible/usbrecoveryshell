@@ -31,11 +31,11 @@
 #	cd <USB-Drive-Root>
 #	git clone https://github.com/rachelproject/contentshell.git contentshell
 #
-usbCreated="20161111.1459"
-usbVersion="1-2-16_kaliteDirMove"
+usbCreated="20161114.2207"
+usbVersion="1-2-16_9.1.0"
 timestamp=$(date +"%b-%d-%Y-%H%M%Z")
 scriptRoot="/boot/efi"
-method="4" # 1=Recovery (DEFAULT), 2=Imager, 3=Format
+method="1" # 1=Recovery (DEFAULT), 2=Imager, 3=Format
 rachelPartition="/media/RACHEL"
 
 commandStatus(){
@@ -86,7 +86,7 @@ updateCore(){
 	chmod +x $rachelPartition/cap-rachel-configure.sh
 	bash $rachelPartition/cap-rachel-configure.sh --usbrecovery &> /dev/null
 	# Copy rachelinstaller version to disk
-	echo $version-$usbversion > $rachelPartition/rachelinstaller-version
+	echo $usbVersion > $rachelPartition/rachelinstaller-version
 }
 
 checkForStagedFiles(){
@@ -145,10 +145,6 @@ else
 	echo; echo "[*] Mounting /dev/mmcblk0p4 to /tmp/cap"
 	mkdir -p /tmp/cap
 	mount /dev/mmcblk0p4 /tmp/cap
-#	echo; echo "[*] ls /tmp/cap"
-#	ls -la /tmp/cap
-#	echo; echo "[*] ls /root/.kalite"
-#	rm -rf /root/.kalite
 	echo; echo "[*] Mounting /dev/sda3"
 	mkdir -p $rachelPartition
 	mount /dev/sda3 $rachelPartition
