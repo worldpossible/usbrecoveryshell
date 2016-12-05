@@ -23,7 +23,7 @@ Install Options or METHOD:
       Copy content shell to /media/RACHEL/rachel
 
 INSTRUCTIONS
-1. On this USB, modify to METHOD variable in script “update.sh”
+1. On this USB, modify to METHOD variable in script “update.sh”
 2. Turn off the CAP
 3. Connect the recovery USB disk to the CAP
 4. Start the CAP
