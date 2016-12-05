@@ -73,7 +73,7 @@ updateCore(){
 	cp -r $scriptRoot/rachel-files/contentshell $rachelPartition/
 	chmod +x $rachelPartition/contentshell/*.shtml
 	echo; echo "[*] Copying KA Lite admin directory to /dev/sda3."
-	cp -r $scriptRoot/rachel-files/kalite-admin-directory $rachelPartition/
+	cp -r $scriptRoot/rachel-files/kalite-admin-directory $rachelPartition/.kalite
 	echo; echo "[*] Copying RACHEL packages for offline update to /dev/sda3"
 	cp -r $scriptRoot/rachel-files/offlinepkgs $rachelPartition/
 	echo; echo "[*] Running phase 1 updates"
