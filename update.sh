@@ -31,8 +31,8 @@
 #	cd <USB-Drive-Root>
 #	git clone https://github.com/rachelproject/contentshell.git contentshell
 #
-usbCreated="20161114.2207"
-usbVersion="1-2-16_9.1.0"
+usbCreated="20161204.2209"
+usbVersion="1-2-16_9.1.1"
 timestamp=$(date +"%b-%d-%Y-%H%M%Z")
 scriptRoot="/boot/efi"
 method="1" # 1=Recovery (DEFAULT), 2=Imager, 3=Format
@@ -69,18 +69,13 @@ updateCore(){
 	echo; echo "[*] Copying RACHEL contentshell files to /dev/sda3 (RACHEL web root)"
 	cp -r $scriptRoot/rachel-files/contentshell $rachelPartition/rachel
 	chmod +x $rachelPartition/rachel/*.shtml
-#	cp $scriptRoot/rachel-files/*.* $rachelPartition/rachel/
-#	cp $scriptRoot/rachel-files/art/*.* $rachelPartition/rachel/art/
 	echo; echo "[*] Copying RACHEL contentshell files to /dev/sda3 (backup)"
 	cp -r $scriptRoot/rachel-files/contentshell $rachelPartition/
 	chmod +x $rachelPartition/contentshell/*.shtml
-#	cp $scriptRoot/rachel-files/*.* $rachelPartition/contentshell/
-#	cp $scriptRoot/rachel-files/art/*.* $rachelPartition/contentshell/art/
+	echo; echo "[*] Copying KA Lite admin directory to /dev/sda3."
+	cp -r $scriptRoot/rachel-files/kalite-admin-directory $rachelPartition/
 	echo; echo "[*] Copying RACHEL packages for offline update to /dev/sda3"
 	cp -r $scriptRoot/rachel-files/offlinepkgs $rachelPartition/
-#	echo; echo "[*] Copying kalite database files to /dev/sda3"
-#	mkdir -p $scriptRoot/rachel-files/kalitedb $rachelPartition/kalitedb
-#	cp -r $scriptRoot/rachel-files/kalitedb/* $rachelPartition/kalitedb/
 	echo; echo "[*] Running phase 1 updates"
 	cp $scriptRoot/rachel-files/cap-rachel-configure.sh $rachelPartition/cap-rachel-configure.sh
 	chmod +x $rachelPartition/cap-rachel-configure.sh
