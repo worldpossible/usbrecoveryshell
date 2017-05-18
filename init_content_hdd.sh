@@ -50,14 +50,14 @@ create_disk_image () {
     parted -s $1 mklabel gpt
     echo "[+] Done."
 
-    # Part1: 20G for preloaded content
+    # Part1: 3G for preloaded content
     echo; echo "[*] Create preloaded content partition."
     #sgdisk -n 1:2048:765460479 -c 1:"preloaded" -u 1:77777777-7777-7777-7777-777777777777 -t 1:8300 $1 # original
     #sgdisk -n 1:2048:+20G -c 1:"preloaded" -u 1:77777777-7777-7777-7777-777777777777 -t 1:8300 $1 # RACHEL 20GB
     sgdisk -n 1:2048:+3G -c 1:"preloaded" -u 1:77777777-7777-7777-7777-777777777777 -t 1:8300 $1
     echo "[+] Done."
 
-    # Part2: 100G for teacher content
+    # Part2: 17G for teacher content
     echo; echo "[*] Create teacher partition."
     #sgdisk -n 2:765460480:-1M -c 2:"uploaded" -u 2:88888888-8888-8888-8888-888888888888 -t 2:8300 $1 # original
     #sgdisk -n 2:21G:+100G -c 2:"uploaded" -u 2:88888888-8888-8888-8888-888888888888 -t 2:8300 $1 # RACHEL 100GB
@@ -72,8 +72,7 @@ create_disk_image () {
     echo "[+] Done."
 
     echo; echo "[*] The partition table is as follows:"
-    gdisk -l $1
-
+    sgdisk -p $1
 }
 
 format_disk () {

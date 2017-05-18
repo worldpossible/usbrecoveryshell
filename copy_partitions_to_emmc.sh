@@ -67,6 +67,7 @@ copy_rootfs () {
     sync
     ln -s /media/preloaded /tmp/$$/srv/media/preloaded
     ln -s /media/uploaded /tmp/$$/srv/media/uploaded
+    ln -s /media/ext-cap-hdd /tmp/$$/srv/media/ext-cap-hdd # cap v2
     sleep 2
     umount $1
     sleep 2

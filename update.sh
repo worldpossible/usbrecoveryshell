@@ -31,8 +31,9 @@
 #	cd <USB-Drive-Root>
 #	git clone https://github.com/rachelproject/contentshell.git contentshell
 #
-usbCreated="20161204.2209"
-usbVersion="1-2-16_9.1.1"
+firmwareVersion="2.2.10"
+usbCreated="20170517.0156"
+usbVersion="20170517"
 timestamp=$(date +"%b-%d-%Y-%H%M%Z")
 scriptRoot="/boot/efi"
 method="1" # 1=Recovery (DEFAULT), 2=Imager, 3=Format

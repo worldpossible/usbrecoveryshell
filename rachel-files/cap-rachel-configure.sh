@@ -19,7 +19,8 @@ osID="$(awk -F '=' '/^ID=/ {print $2}' /etc/os-release 2>&-)"
 osVersion=$(lsb_release -ds)
 # osVersion=$(grep DISTRIB_RELEASE /etc/lsb-release | cut -d"=" -f2)
 # osVersion=$(awk -F '=' '/^VERSION_ID=/ {print $2}' /etc/os-release 2>&-)
-scriptVersion=20170419.2347 # To get current version - date +%Y%m%d.%H%M
+# To get current version - date +%Y%m%d.%H%M
+scriptVersion=20170516.2339
 timestamp=$(date +"%b-%d-%Y-%H%M%Z")
 internet="1" # Enter 0 (Offline), 1 (Online - DEFAULT)
 rachelLogDir="/var/log/rachel"
@@ -35,9 +36,10 @@ kaliteUser="root"
 kaliteDir="/root/.kalite" # Installed as user 'root'
 kaliteContentDir="$rachelPartition/kacontent"
 kaliteMajorVersion="0.17"
-kaliteCurrentVersion="$kaliteMajorVersion.0-0ubuntu3"
+kaliteCurrentVersion="$kaliteMajorVersion.1-0ubuntu1"
 kaliteInstaller=ka-lite-bundle_"$kaliteCurrentVersion"_all.deb
 kalitePrimaryDownload="http://pantry.learningequality.org/downloads/ka-lite/$kaliteMajorVersion/installers/debian/$kaliteInstaller"
+kalitePrimaryContent="http://pantry.learningequality.org/downloads/ka-lite/$kaliteMajorVersion/content"
 kaliteSettings="$kaliteDir/settings.py"
 kiwixInstallerCAPv1="kiwix-0.9-linux-i686.tar.bz2"
 kiwixInstallerCAPv2="kiwix-0.9-linux-x86_64.tar.bz2"
@@ -54,11 +56,10 @@ errorCode="0"
 # MD5 hash list
 buildHashList(){
     cat > $installTmpDir/hashes.md5 << 'EOF'
+d17736647f2d94f7c7dd428d19a64237 ka-lite-bundle_0.17.1-0ubuntu1_all.deb
 ef4e2741b145a21179eed83867cb531a ka-lite-bundle_0.17.0-0ubuntu1_all.deb
 13c447a2e78ad67a06caaded00d01701 ka-lite-bundle_0.17.0-0ubuntu2_all.deb
 34fb1b8df07db49de04bc5faaae6497d ka-lite-bundle_0.17.0-0ubuntu3_all.deb
-619248e8838e21c28b97f1e33b230436 ka-lite-bundle_0.16.9-0ubuntu2_all.deb
-1768a68a0b09089a5b72abf8377d6865 ka-lite-bundle_0.16.9-0ubuntu3_all.deb
 b61fdc3937aa226f34f685ba0bc29db1 kiwix-0.9-linux-i686.tar.bz2
 df6216ba851819d9c3d0208d3ea639df kiwix-0.9-linux-x86_64.tar.bz2
 EOF
@@ -77,6 +78,7 @@ extra-build-files
 .gitignore
 README.txt
 peewee.db
+en-GCF2013
 EOF
 }
 
@@ -127,7 +129,7 @@ cleanup(){
 testingScript(){
     set -x
 
-    newInstall
+    repairRachelScripts
 
     set +x
     exit 1
@@ -150,16 +152,16 @@ opMode(){
             echo; printGood "Script set for 'OFFLINE' mode."
             internet="0"
             offlineVariables
-            echo; printQuestion "The OFFLINE RACHEL content folder is set to:  $dirContentOffline"
-            read -p "Do you want to change the default location? (y/N) " -r
-            if [[ $REPLY =~ ^[yY][eE][sS]|[yY]$ ]]; then
-                echo; printQuestion "What is the location of your content folder? "; read dirContentOffline
-            fi
-            if [[ ! -d $dirContentOffline ]]; then
+            echo; printStatus "Here is list of your current partitions and their mountpoints (if applicable):"
+            lsblk|grep -v mmc|grep -v sda
+            echo; printQuestion "What is the location of your content folder (for example, /media/usb)? "; read dirContentOffline
+            grep -qs " $dirContentOffline " /proc/mounts
+            if [[ $? != 0 ]]; then
                 echo; printError "The folder location does not exist!  Do you want to continue?"
                 read -p "    Enter (y/N) " REPLY
                 if [[ $REPLY =~ ^[Yy]$ ]]; then
-                    dirContentOffline=""
+                    echo; printStatus "CAUTION:  Any action that requires USB content will not function as expected."
+                    dirContentOffline="/dev/null"
                     offlineVariables
                 else
                     printError "Exiting on user request."
@@ -181,6 +183,7 @@ opMode(){
 osCheck(){
     if [[ -z "$osID" ]] || [[ -z "$osVersion" ]]; then
         printError "Internal issue. Couldn't detect OS information."
+        # Default to precise
         osName="precise"
     elif [[ "$osID" == "ubuntu" ]]; then
         # osVersion=$(awk -F '["=]' '/^VERSION_ID=/ {print $3}' /etc/os-release 2>&- | cut -d'.' -f1)
@@ -201,9 +204,11 @@ osCheck(){
 capCheck(){
     if [[ $(cat /etc/hostname) == "WRTD-303N-Server" ]]; then
         os=cap_v1
+        osName="precise"
         KiwixInstaller="$kiwixInstallerCAPv1"
     elif [[ $(cat /etc/hostname) == "WAPD-235N-Server" ]]; then
         os=cap_v2
+        osName="trusty"
         KiwixInstaller="$kiwixInstallerCAPv2"
     else
         echo; printError "This isn't a CAP; sorry, I can not continue."
@@ -214,12 +219,6 @@ capCheck(){
 
 onlineVariables(){
     GPGKEY="apt-key adv --keyserver keyserver.ubuntu.com --recv-keys "
-    # GPGKEY1="apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 40976EAF437D05B5"
-    # GPGKEY2="apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 16126D3A3E5C1192"
-    # GPGKEY3="apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4DF9B28CA252A784"
-    # GPGKEY4="apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 1655A0AB68576280"
-    # GPGKEY5="apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 1397BC53640DB551"
-    # GPGKEY6="apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A040830F7FAC5991"
     SOURCEUS="wget -r $gitRachelPlus/sources.list/$osName/sources-us.list -O /etc/apt/sources.list"
     SOURCEUK="wget -r $gitRachelPlus/sources.list/$osName/sources-uk.list -O /etc/apt/sources.list"
     SOURCESG="wget -r $gitRachelPlus/sources.list/$osName/sources-sg.list -O /etc/apt/sources.list"
@@ -235,15 +234,8 @@ onlineVariables(){
     WORLDPOSSIBLEBRANDLOGOCAPTIVE="wget -r $gitContentShell/art/World-Possible-Logo-300x120.png -O World-Possible-Logo-300x120.png"
     GITCLONERACHELCONTENTSHELL="git clone https://github.com/rachelproject/contentshell contentshell"
     RSYNCDIR="$rsyncOnline"
-    KACONTENTFOLDER=""
     KALITEINSTALL="wget -c $kalitePrimaryDownload -O $installTmpDir/$kaliteInstaller"
-    # Pull from KA Lite directly rather than from our server   
-    # KALITEINSTALL="rsync -avhz --progress $contentOnline/$kaliteInstaller $installTmpDir/$kaliteInstaller"
-    KALITECONTENTINSTALL="rsync -avhz --progress $contentOnline/kacontent/ /media/RACHEL/kacontent/"
     KIWIXINSTALL="wget -c $wgetOnline/downloads/public_ftp/old/z-holding/$KiwixInstaller -O $rachelTmpDir/$KiwixInstaller"
-    WEAVEDINSTALL="wget -c https://github.com/weaved/installer/raw/master/Intel_CAP/weaved_IntelCAP.tar -O $rachelScriptsDir/weaved_IntelCAP.tar"
-    WEAVEDSINGLEINSTALL="wget -c https://github.com/weaved/installer/raw/master/weaved_software/installer.sh -O $rachelScriptsDir/weaved_software/installer.sh"
-    WEAVEDUNINSTALLER="wget -c https://github.com/weaved/installer/raw/master/weaved_software/uninstaller.sh -O $rachelScriptsDir/weaved_software/uninstaller.sh"
     DOWNLOADCONTENTSCRIPT="wget -c $gitRachelPlus/scripts"
     CONTENTWIKI="wget -c http://download.kiwix.org/portable/wikipedia/$FILENAME -O $rachelTmpDir/$FILENAME"
     DOWNLOADSCRIPT="wget $gitRachelPlus/cap-rachel-configure.sh -O $installTmpDir/cap-rachel-configure.sh"
@@ -252,8 +244,6 @@ onlineVariables(){
 
 offlineVariables(){
     GPGKEY="apt-key add $dirContentOffline/rachelplus/gpg-keys/"
-    # GPGKEY2="apt-key add $dirContentOffline/rachelplus/gpg-keys/3E5C1192"
-    # GPGKEY3="apt-key add $dirContentOffline/rachelplus/gpg-keys/A252A784"
     SOURCEUS="rsync -avhz --progress $dirContentOffline/rachelplus/sources.list/$osName/sources-us.list /etc/apt/sources.list"
     SOURCEUK="rsync -avhz --progress $dirContentOffline/rachelplus/sources.list/$osName/sources-uk.list /etc/apt/sources.list"
     SOURCESG="rsync -avhz --progress $dirContentOffline/rachelplus/sources.list/$osName/sources-sg.list /etc/apt/sources.list"
@@ -269,14 +259,8 @@ offlineVariables(){
     WORLDPOSSIBLEBRANDLOGOCAPTIVE="rsync -avhz --progress $dirContentOffline/contentshell/art/World-Possible-Logo-300x120.png ."
     GITCLONERACHELCONTENTSHELL=""
     RSYNCDIR="$dirContentOffline"
-#    ASSESSMENTITEMSJSON="rsync -avhz --progress $dirContentOffline/rachelplus/assessmentitems.json /var/ka-lite/data/khan/assessmentitems.json"
-    KACONTENTFOLDER="$dirContentOffline/kacontent"
     KALITEINSTALL="rsync -avhz --progress $dirContentOffline/$kaliteInstaller $installTmpDir/$kaliteInstaller"
-    KALITECONTENTINSTALL="rsync -avhz --progress $dirContentOffline/kacontent/ /media/RACHEL/kacontent/"
     KIWIXINSTALL=""
-    WEAVEDINSTALL=""
-    WEAVEDSINGLEINSTALL=""
-    WEAVEDUNINSTALLER=""
     DOWNLOADCONTENTSCRIPT="rsync -avhz --progress $dirContentOffline/rachelplus/scripts"
     CONTENTWIKIALL=""
     DOWNLOADSCRIPT="rsync -avhz --progress $dirContentOffline/cap-rachel-configure.sh /root/cap-rachel-configure.sh"
@@ -378,16 +362,15 @@ sanitize(){
     rm -rf /recovery/20* $rachelRecoveryDir/20*
     # Clean bash history
     echo "" > /root/.bash_history
-    echo; printQuestion "Do you want to remove any currently activated Weaved services and run the default Weaved setup?"
-    echo "If you enter 'y', we will install the staged default Weaved services for ports 22, 80, and 8080."
+    echo; printQuestion "Do you want to remove any currently activated Weaved services and run the ESP installer?"
     read -p "    Enter (y/N) " REPLY
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         # Remove previous Weaved installs
         rm -rf /usr/bin/notify_Weaved*.sh /usr/bin/Weaved*.sh /etc/weaved/services/Weaved*.conf /root/Weaved*.log
-        # Install default weaved services
-        installDefaultWeavedServices
+        # Install ESP
+        installESP
     fi
-    echo; printGood "All ready for a customer; register Weaved services, if needed."
+    echo; printGood "All cleaned up for the customer."
 }
 
 installKiwix(){
@@ -481,187 +464,33 @@ EOF
     printGood "Done."
 }
 
-installDefaultWeavedServices(){
-    weavedSoftware="/root/rachel-scripts/weaved_software"
-    echo; printStatus "Installing Weaved service."
-    cd $rachelScriptsDir
-    # Download weaved files
-    echo; printStatus "Downloading required files."
-    $WEAVEDINSTALL
-    commandStatus
-    tar xvf weaved_IntelCAP.tar
-    commandStatus
-    if [[ $errorCode == 0 ]] && [[ -d $rachelScriptsDir/weaved_software ]]; then
-        rm -f $rachelScriptsDir/weaved_IntelCAP.tar
-        echo; printGood "Done."
-        # Run installer for port 22 - sets the alias to 0-xxxx (where xxxx is the last four of the MAC)
-        cd $rachelScriptsDir/weaved_software
-        wget -c https://raw.githubusercontent.com/rachelproject/rachelplus/master/scripts/auto-installer.sh -O $weavedSoftware/auto-installer.sh
-        if [[ ! -f $weavedSoftware/auto-installer.conf ]]; then 
-            printError "MISSING FILE:  You need to create the file $weavedSoftware/auto-installer.conf"
-            echo "Create the file and add the following lines to it:"
-            echo "USERNAME='Weaved-website-username'"
-            echo "PASSWD='Weaved-website-password'"
-            exit
-        fi
-        bash $weavedSoftware/auto-installer.sh 
-        echo; printGood "Weaved service install complete."
-        echo "NOTE: A Weaved service uninstaller is available from the Utilities menu of this script."
-        # Remove config file
-        rm -f $rachelScriptsDir/weaved_software/auto-installer.conf
-    else
-        echo; printError "One or more files did not download correctly; check log file ($rachelLog) and try again."
-        echo; exit 1
-    fi
-}
-
-installWeavedService(){
-    if [[ $internet == "0" ]]; then
-        echo; printError "The CAP must be online to install/remove Weaved services."
-    else
-        echo; printStatus "Installing Weaved service."
-        cd $rachelScriptsDir
-
-        # Download weaved files
-        echo; printStatus "Downloading required files."
-        $WEAVEDSINGLEINSTALL
-        commandStatus
-
-        if [[ $errorCode == 0 ]] && [[ -f $rachelScriptsDir/weaved_software/installer.sh ]]; then
-            # Fix OS Arch check in installer.sh
-            sed -i 's/\[ "$machineType" = "x86_64" \] && \[ "$osName" = "Linux" \]/\[ "$osName" = "Linux" \]/g' $rachelScriptsDir/weaved_software/installer.sh
-            sed -i 's/\.\/bin/\./g' $rachelScriptsDir/weaved_software/installer.sh
-            # Download required files
-            mkdir -p $rachelScriptsDir/weaved_software/enablements
-            wget -c https://github.com/weaved/installer/raw/master/weaved_software/enablements/ssh.linux -O $rachelScriptsDir/weaved_software/enablements/ssh.linux
-            wget -c https://github.com/weaved/installer/raw/master/weaved_software/enablements/tcp.linux -O $rachelScriptsDir/weaved_software/enablements/tcp.linux
-            wget -c https://github.com/weaved/installer/raw/master/weaved_software/enablements/vnc.linux -O $rachelScriptsDir/weaved_software/enablements/vnc.linux
-            wget -c https://github.com/weaved/installer/raw/master/weaved_software/enablements/web.linux -O $rachelScriptsDir/weaved_software/enablements/web.linux
-            wget -c https://github.com/weaved/installer/raw/master/weaved_software/enablements/webssh.linux -O $rachelScriptsDir/weaved_software/enablements/webssh.linux
-            wget -c https://github.com/weaved/installer/raw/master/weaved_software/enablements/webport.pi -O $rachelScriptsDir/weaved_software/enablements/webport.pi
-            wget -c https://github.com/weaved/installer/raw/master/weaved_software/enablements/webiopi.pi -O $rachelScriptsDir/weaved_software/enablements/webiopi.pi
-            wget -c https://github.com/weaved/installer/raw/master/weaved_software/Yo -O $rachelScriptsDir/weaved_software/Yo
-            wget -c https://github.com/weaved/installer/raw/master/weaved_software/scripts/notify.sh -O $rachelScriptsDir/weaved_software/notify.sh
-            wget -c https://github.com/weaved/installer/raw/master/weaved_software/scripts/send_notification.sh -O $rachelScriptsDir/weaved_software/send_notification.sh
-            chmod +x $rachelScriptsDir/weaved_software/*.sh $rachelScriptsDir/weaved_software/Yo
-            sed -i 's|/scripts||g' $rachelScriptsDir/weaved_software/installer.sh
-            echo; printGood "Done."
-            # Run installer
-            cd $rachelScriptsDir/weaved_software
-            bash installer.sh
-
-            echo; printGood "Weaved service install complete."
-            printGood "NOTE: An Weaved service uninstaller is available from the Utilities menu of this script."
-        else
-            echo; printError "One or more files did not download correctly; check log file ($rachelLog) and try again."
-            cleanup
-            echo; exit 1
-        fi
-    fi
-}
-
-uninstallAllWeavedServices(){
-    echo; printStatus "Uninstalling Weaved service."
-
-    TMP_DIR=/tmp
-    # Stop all Weaved services
-    for i in `ls /usr/bin/Weaved*.sh`; do
-        $i stop
-    done
-
-    # Remove Weaved files
-    rm /usr/bin/weaved*
-    rm /usr/bin/Weaved*
-    rm -rf /etc/weaved
-
-    # Remove Weaved from crontab
-    crontab -l | grep -v weaved | cat > $TMP_DIR/.crontmp
-    crontab $TMP_DIR/.crontmp
-
-    # Ensure user knows to remove from online service list
-    echo; printStatus "If you uninstalled Weaved connectd without deleting Services first,"
-    echo "there may be orphaned Services in your Services List.  Use the "
-    echo "'Settings' link in the web portal Services List to delete these."
-
-    echo; printGood "Weaved service uninstall complete."
-}
-
-
-uninstallWeavedService(){
-    weavedUninstaller(){
-        bash $rachelScriptsDir/weaved_software/uninstaller.sh
-        echo; printGood "Weaved service uninstall complete."
-    }
-    echo; printStatus "Uninstalling Weaved service."
-    cd $rachelScriptsDir
-    # Run uninstaller
-    if [[ -f $rachelScriptsDir/weaved_software/uninstaller.sh ]]; then 
-        weavedUninstaller
-    else
-        printError "The Weaved uninstaller does not exist. Attempting to download..."
-        if [[ $internet == "1" ]]; then
-            $WEAVEDUNINSTALLER
-            commandStatus
-            if [[ $errorCode == 0 ]] && [[ -f $rachelScriptsDir/weaved_software/uninstaller.sh ]]; then
-                weavedUninstaller
-            else
-                printError "Download failed; check log file ($rachelLog) and try again."
-            fi
-        else
-            printError "No internet connection; I can not download the uninstaller."
-            echo "    Connect the CAP to the internet and try the uninstaller again."
-        fi
-    fi
-}
-
-backupWeavedService(){
-    # Clear current configs
-    stty sane
-    if [[ `find /etc/weaved/services/ -name 'Weaved*.conf' 2>/dev/null | wc -l` -ge 1 ]]; then
-        echo; printStatus "Backing up configuration files to $rachelRecoveryDir/weaved"
-        rm -rf $rachelRecoveryDir/Weaved
-        mkdir -p $rachelRecoveryDir/Weaved
-        # Backup Weaved configs
-        cp -f /etc/weaved/services/Weaved*.conf /usr/bin/Weaved*.sh /usr/bin/notify_Weaved*.sh $rachelRecoveryDir/Weaved/ 2>/dev/null
-        printGood "Your current configuration is backed up and will be restored if you have to run the USB Recovery."
-    elif [[ ! -d /etc/weaved ]]; then
-        # Weaved is no longer installed, remove all backups
-        rm -rf $rachelRecoveryDir/Weaved
-    else
-        echo; printError "You do not have any Weaved configuration files to backup."
-    fi
-    # Add Weaved restore back into rachel-scripts.sh
-    # Clean rachel-scripts.sh
-    sed -i '/Weaved/d' $rachelScriptsFile
-    # Write restore commands to rachel-scripts.sh
-    sudo sed -i '5 a # Restore Weaved configs, if needed' $rachelScriptsFile
-    sudo sed -i '6 a echo \$(date) - Checking Weaved install' $rachelScriptsFile
-    sudo sed -i '7 a if [[ -d '$rachelRecoveryDir'/Weaved ]] && [[ `ls /usr/bin/Weaved*.sh 2>/dev/null | wc -l` == 0 ]]; then' $rachelScriptsFile
-    sudo sed -i '8 a echo \$(date) - Weaved backup files found but not installed, recovering now' $rachelScriptsFile
-    sudo sed -i '9 a mkdir -p /etc/weaved/services #Weaved' $rachelScriptsFile
-    sudo sed -i '10 a cp '$rachelRecoveryDir'/Weaved/Weaved*.conf /etc/weaved/services/' $rachelScriptsFile
-    sudo sed -i '11 a cp '$rachelRecoveryDir'/Weaved/*.sh /usr/bin/' $rachelScriptsFile
-    sudo sed -i '12 a reboot #Weaved' $rachelScriptsFile
-    sudo sed -i '13 a fi #Weaved' $rachelScriptsFile
-}
-
 downloadOfflineContent(){
+    # Check for internet
     if [[ $internet == 0 ]]; then echo; printError "You need to be online to download/update your OFFLINE content."; break; fi
-    echo; printQuestion "The OFFLINE RACHEL content folder is set to:  $dirContentOffline"
-    echo "Do you want to change the default location? (y/N) "; read REPLY
-    if [[ $REPLY =~ ^[yY][eE][sS]|[yY]$ ]]; then
-        echo; printQuestion "What is the location of your content folder (no trailing slash; example, /media/usb)? "; read dirContentOffline
-    fi
+    echo; printStatus "Here is list of your currently mounted USB drives:"
+    lsblk|grep -v mmc|grep -v sda
+    echo; printQuestion "What is the mountpoint name of your content folder (no trailing slash; example, /media/usb)? "; read dirContentOffline
     while :; do
         if [[ ! -d $dirContentOffline ]]; then
             printError "The folder location does not exist!  Please check the path to your OFFLINE content folder and try again."
-            echo; printQuestion "What is the location of your content folder (no trailing slash; example, /media/usb)? "; read dirContentOffline
+            echo; printQuestion "What is the mountpoint name of your content folder (no trailing slash; example, /media/usb)? "; read dirContentOffline
         else
             break
         fi
     done
 
+    # Check if USB is formatted with ext2, ext3 or ext4
+    usbFileSystem=$(df -T|grep $dirContentOffline |awk '{ print $2 }')
+    if [[ "$usbFileSystem" != "ext2" && "$usbFileSystem" != "ext3" && "$usbFileSystem" != "ext4" ]]; then
+        echo; printError "ERROR:  USB is not formatted in ext2, ext3, or ext4.  For a successful offline update, your external USB must be formatted in one of those file systems or symbolic links will not work and your offline update will not correctly update RACHEL modules.  Sorry, I cannot continue; reformat your USB to one of those file systems and try again."
+        break 
+    fi
+
+    # Download gpg keys
+    for i in $(echo $gpgKeys); do apt-key export $i > $dirContentOffline/rachelplus/gpg-keys/$i; done
+
     # Download RACHEL script 
+    echo; printStatus "Downloading/updating the latest RACHEL configure script:  cap-rachel-configure.sh"
     $DOWNLOADSCRIPT >&2
     commandStatus
     if [[ -s $installTmpDir/cap-rachel-configure.sh ]]; then
@@ -674,76 +503,12 @@ downloadOfflineContent(){
         echo
     fi
 
-    # Download RACHEL modules
-    echo "" > $rachelScriptsDir/rsyncInclude.list
-    ## Add user input to languages they want to support
-    echo; printQuestion "What language content you would like to download for OFFLINE install:"
-    echo "  - [Arabic] - Arabic content"
-    echo "  - [Deutsch] - German content"
-    echo "  - [English] - English content"
-    echo "  - [Español] - Spanish content"
-    echo "  - [Français] - French content"
-    echo "  - [Português] - Portuguese content"
-    echo "  - [Hindi] - Hindi content"
-    echo
-    select menu in "Arabic" "Deutsch" "English" "Español" "Français" "Português" "Hindi"; do
-        case $menu in
-        Arabic)
-            echo "#Arabic" >> $rachelScriptsDir/rsyncInclude.list
-            echo "ar-*" >> $rachelScriptsDir/rsyncInclude.list
-        ;;
-        Deutsch)
-            echo "#German" >> $rachelScriptsDir/rsyncInclude.list
-            echo "de-*" >> $rachelScriptsDir/rsyncInclude.list
-        ;;
-        English)
-            echo "#English" >> $rachelScriptsDir/rsyncInclude.list
-            echo "en-*" >> $rachelScriptsDir/rsyncInclude.list
-        ;;
-        Español)
-            echo "#Spanish" >> $rachelScriptsDir/rsyncInclude.list
-            echo "es-*" >> $rachelScriptsDir/rsyncInclude.list
-        ;;
-        Français)
-            echo "#French" >> $rachelScriptsDir/rsyncInclude.list
-            echo "fr-*" >> $rachelScriptsDir/rsyncInclude.list
-        ;;
-        Português)
-            echo "#Portuguese" >> $rachelScriptsDir/rsyncInclude.list
-            echo "pt-*" >> $rachelScriptsDir/rsyncInclude.list
-        ;;
-        Hindi)
-            echo "#Hindi" >> $rachelScriptsDir/rsyncInclude.list
-            echo "hi-*" >> $rachelScriptsDir/rsyncInclude.list
-        ;;
-        esac
-        echo; printStatus "Language modules included:"
-        sed -i '/^\x*$/d' $rachelScriptsDir/rsyncInclude.list
-        sort -u $rachelScriptsDir/rsyncInclude.list > $rachelScriptsDir/rsyncInclude.list.tmp; mv $rachelScriptsDir/rsyncInclude.list.tmp $rachelScriptsDir/rsyncInclude.list
-        echo "$(cat $rachelScriptsDir/rsyncInclude.list | grep \# | cut -d"#" -f2)"
-        echo; printQuestion "Do you wish to select another language? (Y/n)"; read REPLY
-        if [[ $REPLY =~ ^[Nn]$ ]]; then
-            break
-        fi
-        echo; printQuestion "What additional language would you like to select?"
-        echo "1)Arabic  2)Deutsch  3)English  4)Español  5)Français  6)Português  7)Hindi"
-    done
-    buildRsyncModuleExcludeList
-    MODULELIST=$(rsync --list-only --exclude-from "$rachelScriptsDir/rsyncExclude.list" --include-from "$rachelScriptsDir/rsyncInclude.list" --exclude '*' $RSYNCDIR/rachelmods/ | awk '{print $5}' | tail -n +2)
-    echo; printStatus "Rsyncing core RACHEL content from $RSYNCDIR"
-    while IFS= read -r module; do
-        echo; printStatus "Downloading $module"
-        rsync -qavz --update --delete-after $RSYNCDIR/rachelmods/$module $dirContentOffline/rachelmods
-        commandStatus
-        printGood "Done."
-    done <<< "$MODULELIST"
-
     # Downloading Github repo:  rachelplus
-    printStatus "Downloading/updating the GitHub repo:  rachelplus"
+    echo; printStatus "Downloading/updating the GitHub repo:  rachelplus"
     if [[ -d $dirContentOffline/rachelplus ]]; then 
         cd $dirContentOffline/rachelplus; git fetch; git reset --hard origin
     else
-        echo; git clone https://github.com/rachelproject/rachelplus $dirContentOffline/rachelplus
+        git clone https://github.com/rachelproject/rachelplus $dirContentOffline/rachelplus
     fi
     commandStatus
     printGood "Done."
@@ -753,7 +518,7 @@ downloadOfflineContent(){
     if [[ -d $dirContentOffline/contentshell ]]; then 
         cd $dirContentOffline/contentshell; git fetch; git reset --hard origin
     else
-        echo; git clone https://github.com/rachelproject/contentshell $dirContentOffline/contentshell
+        git clone https://github.com/rachelproject/contentshell $dirContentOffline/contentshell
     fi
     commandStatus
     printGood "Done."
@@ -776,23 +541,69 @@ downloadOfflineContent(){
 
     # Downloading kiwix
     echo; printStatus "Downloading/updating kiwix."
-
     wget -c $wgetOnline/downloads/public_ftp/old/z-holding/$KiwixInstaller -O $dirContentOffline/$KiwixInstaller
     commandStatus
     printGood "Done."
 
-    # Downloading deb packages
-    echo; printStatus "Downloading/updating debian packages."
-    mkdir -p $dirContentOffline/offlinepkgs
+    # Downloading Stem module
+    echo; printStatus "Downloading stem module."
     cd $dirContentOffline/offlinepkgs
-    apt-get download $debPrecisePackageList
+    wget -c $stemURL -O $stemPkg
     commandStatus
     printGood "Done."
+
+    # Download RACHEL modules
+    echo "" > $rachelScriptsDir/rsyncInclude.list
+    ## Add user input to languages they want to support
+    echo; printQuestion "What language content you would like to download for OFFLINE install:"
+    echo "  - [Arabic] - Arabic content"
+    echo "  - [Deutsch] - German content"
+    echo "  - [English] - English content"
+    echo "  - [Español] - Spanish content"
+    echo "  - [Français] - French content"
+    echo "  - [Português] - Portuguese content"
+    echo "  - [Hindi] - Hindi content"
+    echo "  - [None] - Continue without content"
+    echo
+    select menu in "Arabic" "Deutsch" "English" "Español" "Français" "Português" "Hindi" "None"; do
+        case $menu in
+            Arabic) echo "#Arabic" >> $rachelScriptsDir/rsyncInclude.list; echo "ar-*" >> $rachelScriptsDir/rsyncInclude.list ;;
+            Deutsch) echo "#German" >> $rachelScriptsDir/rsyncInclude.list; echo "de-*" >> $rachelScriptsDir/rsyncInclude.list ;;
+            English) echo "#English" >> $rachelScriptsDir/rsyncInclude.list; echo "en-*" >> $rachelScriptsDir/rsyncInclude.list ;;
+            Español) echo "#Spanish" >> $rachelScriptsDir/rsyncInclude.list; echo "es-*" >> $rachelScriptsDir/rsyncInclude.list ;;
+            Français) echo "#French" >> $rachelScriptsDir/rsyncInclude.list; echo "fr-*" >> $rachelScriptsDir/rsyncInclude.list ;;
+            Kannada) echo "#Kannada" >> $rachelScriptsDir/rsyncInclude.list; echo "kn-*" >> $rachelScriptsDir/rsyncInclude.list ;;
+            Português) echo "#Portuguese" >> $rachelScriptsDir/rsyncInclude.list; echo "pt-*" >> $rachelScriptsDir/rsyncInclude.list ;;
+            Hindi) echo "#Hindi" >> $rachelScriptsDir/rsyncInclude.list; echo "hi-*" >> $rachelScriptsDir/rsyncInclude.list ;;
+            None) sleep 0 ;;
+            *) printError "That really isn't an answer I am looking for..." ;;
+        esac
+        echo; printStatus "Language modules included:"
+        sed -i '/^\x*$/d' $rachelScriptsDir/rsyncInclude.list
+        sort -u $rachelScriptsDir/rsyncInclude.list > $rachelScriptsDir/rsyncInclude.list.tmp; mv $rachelScriptsDir/rsyncInclude.list.tmp $rachelScriptsDir/rsyncInclude.list
+        echo "$(cat $rachelScriptsDir/rsyncInclude.list | grep \# | cut -d"#" -f2)"
+        echo; printQuestion "Do you wish to select another language? (Y/n)"; read REPLY
+        if [[ $REPLY =~ ^[Nn]$ ]]; then
+            break
+        fi
+        echo; printQuestion "What additional language would you like to select?"
+        echo "1)Arabic  2)Deutsch  3)English  4)Español  5)Français  6)Português  7)Hindi  8)None"
+    done
+    buildRsyncModuleExcludeList
+    MODULELIST=$(rsync --list-only --exclude-from "$rachelScriptsDir/rsyncExclude.list" --include-from "$rachelScriptsDir/rsyncInclude.list" --exclude '*' $RSYNCDIR/rachelmods/ | awk '{print $5}' | tail -n +2)
+    echo; printStatus "Rsyncing core RACHEL content from $RSYNCDIR"
+    while IFS= read -r module; do
+        echo; printStatus "Downloading $module"
+        rsync -rltzuv --delete-after $RSYNCDIR/rachelmods/$module $dirContentOffline/rachelmods
+        commandStatus
+        printGood "Done."
+    done <<< "$MODULELIST"
 
     echo; printStatus "This is your current offline directory listing:"
     echo "- - - - - - - - - - - -" 
     ls -l $dirContentOffline/ | awk '{ print $9 }'
     echo; echo "Modules downloaded:"
+    echo "- - - - - - - - - - - -" 
     ls -l $dirContentOffline/rachelmods/ | awk '{ print $9 }'
 }
 
@@ -845,6 +656,16 @@ changePackageRepo(){
         printGood "Done."
         break
     done    
+}
+
+downloadPackages(){
+    if [[ $osName == "precise" ]]; then
+        cd precise; apt-get download $debPrecisePackageList
+    elif [[ $osName == "trusty" ]]; then
+        cd trusty; apt-get download $debTrustyPackageList
+    else
+        cd precise; apt-get download $debPrecisePackageList
+    fi
 }
 
 newInstall(){
@@ -1012,7 +833,7 @@ checkContentShell(){
     printGood "Done."
 }
 
-contentModuleInstall(){
+addModule(){
     if [[ -f /tmp/module.lst ]]; then
         echo; printStatus "Your selected module list:"
         # Sort/unique the module list
@@ -1050,7 +871,7 @@ contentModuleInstall(){
             rsync -avz --delete-after $RSYNCDIR/rachelmods/$m $rachelWWW/modules/
             commandStatus
             # If KA Lite module, than set the kaliteUpdate "flag" to install the contentpack
-            if [[ $m == *kalite ]]; then
+            if [[ $m == *-kalite ]]; then
                 touch $rachelPartition/kaliteUpdate
             fi
             printGood "Done."
@@ -1059,66 +880,54 @@ contentModuleInstall(){
     rm -f /tmp/module.lst
 }
 
-contentLanguageInstall(){
-    languageMenu(){
-        echo; printQuestion "What additional language would like to download/update?"
-        echo "1)Arabic  2)Deutsch  3)English  4)Español  5)Français  6)Kannada  7)Português  8)Hindi"        
-    }
+addMultipleModules(){
     ## Add user input to languages they want to support
     echo; printStatus "The language install will install essential modules from the language(s) you choose."
-    echo; printQuestion "What language content you would like to download for OFFLINE install:"
-    echo "  - [Arabic] - Arabic content"
-    echo "  - [Deutsch] - German content"
+    echo; printQuestion "What language content you would like to install:"
     echo "  - [English] - English content"
     echo "  - [Español] - Spanish content"
     echo "  - [Français] - French content"
-    echo "  - [Kannada] - Kannada content"
-    echo "  - [Português] - Portuguese content"
-    echo "  - [Hindi] - Hindi content"
+    echo "  - [Full-EN-ES-FR] - The core content in English, Español, and Français"
+    echo "  - [Justice] - Justice default content"
+    echo "  - [Justice-OYA] - Justice Oregon Youth Authority content"
+    echo "  - [Custom] - Your own custom list of modules (1 module name/line)"
+    echo "  - [Exit] Install"
     echo
-    select menu in "Arabic" "Deutsch" "English" "Español" "Français" "Kannada" "Português" "Hindi"; do
+    select menu in "English-Core" "Español-Core" "Français-Core" "Full-EN-ES-FR" "Justice" "Justice-OYA" "Custom" "Exit"; do
         case $menu in
-        Arabic)
-            lang="ar"
-            break
-        ;;
-        Deutsch)
-            lang="de"
-            break
-        ;;
-        English)
-            lang="en"
-            break
-        ;;
-        Español)
-            lang="es"
-            break
-        ;;
-        Français)
-            lang="fr"
-            break
-        ;;
-        Kannada)
-            lang="kn"
-            break
-        ;;
-        Português)
-            lang="pt"
-            break
-        ;;
-        Hindi)
-            lang="hi"
-            break
-        ;;
+        English-Core) option="en_plus.modules"; break ;;
+        Español-Core)  option="es_plus.modules"; break ;;
+        Français-Core) option="fr_plus.modules"; break ;;
+        Full-EN-ES-FR) option="full.modules"; break ;;
+        Justice) option="justice.modules"; break ;;
+        Justice-OYA) option="justice-oya.modules"; break ;;
+        Custom) option="custom"; break ;;
+        Exit) option="exit"; break ;;
         esac
     done
     # get content
-    echo; printStatus "Installing/updating $lang content modules"
-    contentModuleListInstall $rachelWWW/scripts/"$lang"_plus.modules
-    commandStatus
-    # Since we are installing the entire language (which includes KA Lite); set the kaliteUpdate flag to install contentpack
-    touch $rachelPartition/kaliteUpdate
-    printGood "Done."
+    if [[ $option == "exit" ]]; then printError "Exiting on user request."; fi
+    if [[ $option == "custom" ]]; then
+        echo; printStatus "Here is list of your current partitions and their mountpoints (if applicable):"
+        lsblk|grep -v mmc|grep -v sda
+        echo; printQuestion "What is the full path to your custom module list file (example: /media/usb/customList.modules)?"; read option
+        grep -qs $option /proc/mounts
+        if [[ $? != 0 ]]; then
+            echo; printError "The folder location does not exist!  Try mounting a partition and trying again."
+        else
+            contentModuleListInstall $option
+            # Since we are installing the entire language (which includes KA Lite); set the kaliteUpdate flag to install contentpack
+            touch $rachelPartition/kaliteUpdate
+            printGood "Done."
+        fi
+    else
+        echo; printStatus "Installing/updating content from $option"
+        contentModuleListInstall $rachelWWW/scripts/"$option"
+        commandStatus
+        # Since we are installing the entire language (which includes KA Lite); set the kaliteUpdate flag to install contentpack
+        touch $rachelPartition/kaliteUpdate
+        printGood "Done."
+    fi
 }
 
 contentUpdate(){
@@ -1126,17 +935,17 @@ contentUpdate(){
     MODULELIST=$(rsync --list-only --exclude-from "$rachelScriptsDir/rsyncExclude.list" $rachelWWW/modules/ | awk '{print $5}' | tail -n +2)
     while IFS= read -r module; do
         echo; printStatus "Downloading $module"
-        rsync -avzP --update --delete-after --exclude-from "$rachelScriptsDir/rsyncExclude.list" $RSYNCDIR/rachelmods/$module $rachelWWW/modules/
+        rsync -rltzuv --delete-after --exclude-from "$rachelScriptsDir/rsyncExclude.list" $RSYNCDIR/rachelmods/$module $rachelWWW/modules/
         commandStatus
         # If KA Lite module, than set the kaliteUpdate "flag" to install the contentpack
-        if [[ $module == *kalite ]]; then
+        if [[ $module == *-kalite ]]; then
             touch $rachelPartition/kaliteUpdate
         fi
         printGood "Done."
     done <<< "$MODULELIST"
 }
 
-kaliteRemove(){
+removeKALite(){
     # Removing old version
     echo; printStatus "Cleaning any previous KA Lite installation files."
     if [[ $kaliteVersionDate == 1 ]]; then
@@ -1191,7 +1000,7 @@ kaliteLocationUpdate(){
     fi
 }
 
-kaliteInstall(){
+installKALite(){
     # Downloading KA Lite
     echo; printStatus "Downloading KA Lite Version $kaliteCurrentVersion"
     $KALITEINSTALL
@@ -1229,7 +1038,6 @@ kaliteInstall(){
 
 kaliteSetup(){
     echo; printStatus "Setting up KA Lite."
-
     # Determine version of KA Lite --> kaliteVersionDate (0=No KA LITE, 1=Version prior to 0.15, 2=Version greater than/equal to 0.15)
     if [[ -f /var/ka-lite/kalite/local_settings.py ]]; then
         kaliteVersion=$(/var/ka-lite/bin/kalite manage --version)
@@ -1239,9 +1047,9 @@ kaliteSetup(){
         read -p "    Enter (y/N) " REPLY
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             # Remove previous KA Lite
-            kaliteRemove
+            removeKALite
             # Install KA Lite
-            kaliteInstall
+            installKALite
         else
             printStatus "Skipping install."
         fi
@@ -1257,7 +1065,7 @@ kaliteSetup(){
         read -p "Enter (y/N) " REPLY
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             # Install KA Lite
-            kaliteInstall
+            installKALite
         fi
     else
         echo; printStatus "It doesn't look like KA Lite is installed; installing now."
@@ -1265,24 +1073,24 @@ kaliteSetup(){
         kaliteUser="root"
         kaliteVersionDate=0
         # Remove previous KA Lite
-        kaliteRemove
+        removeKALite
         # Install KA Lite
-        kaliteInstall
+        installKALite
     fi
 
-    # For debug purposes, print ka-lite user
-    echo; printStatus "KA Lite is installed as user:  $(cat /etc/ka-lite/username)"
-
     # Configure ka-lite
-    echo; printStatus "Configuring KA Lite content settings file:  $kaliteSettings"
-    printStatus "KA Lite content directory being set to:  $kaliteContentDir"
+    echo; printStatus "KA Lite content settings file:  $kaliteSettings"
+    printStatus "KA Lite content directory:  $kaliteContentDir"
     sed -i '/^CONTENT_ROOT/d' $kaliteSettings
     sed -i '/^DATABASES/d' $kaliteSettings
     echo 'CONTENT_ROOT = "/media/RACHEL/kacontent"' >> $kaliteSettings
 
     # Install module for RACHEL index.php
-    echo; printStatus "Syncing RACHEL web interface 'KA Lite module'."
+    echo; printStatus "Syncing English KA Lite RACHEL module"
     rsync -avz --delete-after $RSYNCDIR/rachelmods/en-kalite $rachelWWW/modules/
+
+    # Download contentpacks
+    downloadKAContentPacks
 
     # Symlink the KA Lite database and video files
     kaliteCheckFiles
@@ -1307,20 +1115,22 @@ kaliteSetup(){
 kaliteCheckFiles(){
     # Stopping KA Lite
     echo; printStatus "Stopping kalite"
-    kalite stop
+    sudo kalite stop
     # clear out possible old videos taking up space
     echo; printStatus "Clearing old video content"
     rm -rf /media/RACHEL/kacontent
     mkdir /media/RACHEL/kacontent
     # clear out old database files
     rm -rf /root/.kalite/database/content_khan_*.sqlite
+    rm -rf /root/.kalite/content_khan_*.sqlite
     # check/install kalite content packs (this covers subtitles)
     if [[ -f $rachelPartition/kaliteUpdate ]]; then
         echo; printStatus "Installing content packs"
-        for i in `ls $rachelWWW/modules/*-kalite/*-contentpack.zip`; do
-            if [[ $i =~ ([a-z]{2})-contentpack.zip ]]; then
-                thislang=${BASH_REMATCH[1]}
-                kalite manage retrievecontentpack local $thislang $rachelWWW/modules/"$thislang"-kalite/"$thislang"-contentpack.zip
+        # Install new format contentpacks
+        for i in `ls -1 --hide=*-contentpack.zip $rachelWWW/modules/*-kalite/`; do
+            if [[ $i =~ ([a-z]{2}).zip ]]; then
+                lang=${BASH_REMATCH[1]}
+                kalite manage retrievecontentpack local $lang $rachelWWW/modules/"$lang"-kalite/"$lang".zip
             fi
         done
         rm -f $rachelPartition/kaliteUpdate
@@ -1333,10 +1143,14 @@ kaliteCheckFiles(){
     echo; printStatus "Symlinking all KA database module files to the actual KA Lite database folder."
     find $rachelWWW/modules/*-kalite -name "*.sqlite" -exec ln -sf {} /root/.kalite/database/ \;
     # Starting KA Lite
-    echo; kalite start
+    echo; sudo kalite start
     # Update KA Lite version
     dpkg -s ka-lite-bundle | grep ^Version | cut -d" " -f2 > /etc/kalite-version
     printGood "Done."
+}
+
+kaliteDiagnostic(){
+    kalite diagnose; echo
 }
 
 downloadKAContent(){
@@ -1352,15 +1166,15 @@ downloadKAContent(){
     select menu in "English" "Español" "Français" "Skip"; do
         case $menu in
         English)
-            lang="en-kalite"
+            lang="en"
             break
         ;;
         Español)
-            lang="es-kalite"
+            lang="es"
             break
         ;;
         Français)
-            lang="fr-kalite"
+            lang="fr"
             break
         ;;
         Skip)
@@ -1371,11 +1185,33 @@ downloadKAContent(){
     done
     if [[ ! -z $lang ]]; then
         echo; printStatus "Downloading KA Lite content from $RSYNCDIR"
-        rsync -Pavz --include *.mp4 --exclude assessment --exclude locale $RSYNCDIR/rachelmods/$lang/content/ $kaliteContentDir
+        rsync -Pavz --include *.mp4 --exclude assessment --exclude locale $RSYNCDIR/rachelmods/$lang-kalite/content/ /media/RACHEL/rachel/modules/$lang-kalite/content
+        # echo; printStatus "Downloading KA Lite contentpack"
+        # rsync -Pavz $RSYNCDIR/rachelmods/$lang-kalite/$lang.zip /media/RACHEL/rachel/modules/$lang-kalite/$lang.zip
     fi
     touch $rachelPartition/kaliteUpdate
     kaliteCheckFiles
     commandStatus
+    printGood "Done."
+}
+
+downloadKAContentPacks(){
+    for i in `ls $rachelWWW/modules/*-kalite/rachel-index.php`; do
+        if [[ $i =~ ([a-z]{2})-kalite ]]; then
+            lang=${BASH_REMATCH[1]}
+            echo; printStatus "Downloading KA Lite contentpack: $lang"
+            rsync -Pavz $RSYNCDIR/rachelmods/$lang-kalite/$lang.zip /media/RACHEL/rachel/modules/$lang-kalite/$lang.zip
+        fi
+        commandStatus
+        # Soft link kalite sqlite language files
+        rm -f $kaliteDir/content_khan_$lang.sqlite
+        rm -f $kaliteDir/database/content_khan_$lang.sqlite
+        ln -s $rachelWWW/modules/$lang-kalite/content_khan_$lang.sqlite $kaliteDir/database/content_khan_$lang.sqlite
+        # Soft link old contentpack name to new
+        rm -f $rachelWWW/modules/$lang-kalite/$lang-contentpack.zip 2>/dev/null
+        ln -s $rachelWWW/modules/$lang-kalite/$lang.zip $rachelWWW/modules/$lang-kalite/$lang-contentpack.zip 2>/dev/null
+    done
+    touch $rachelPartition/kaliteUpdate
     printGood "Done."
 }
 
@@ -1584,37 +1420,6 @@ EOF
         printGood "Done."
     fi
 
-    if [[ -d $kaliteDir ]]; then
-        # Delete previous setup commands from /etc/rc.local (not used anymore)
-        sudo sed -i '/ka-lite/d' /etc/rc.local
-        sudo sed -i '/sleep/d' /etc/rc.local
-        # Delete previous setup commands from the $rachelScriptsFile
-        sudo sed -i '/ka-lite/d' $rachelScriptsFile
-        sudo sed -i '/kalite/d' $rachelScriptsFile
-        sudo sed -i '/sleep/d' $rachelScriptsFile
-        echo; printStatus "Setting up KA Lite to start at boot..."
-        # Start KA Lite at boot time
-        sudo sed -i '$e echo "# Start kalite at boot time"' $rachelScriptsFile
-        sed -i '$e echo "echo \\$(date) - Starting kalite"' $rachelScriptsFile
-        sudo sed -i '$e echo "sleep 5 #kalite"' $rachelScriptsFile
-        sudo sed -i '$e echo "sudo /usr/bin/kalite start"' $rachelScriptsFile
-        printGood "Done."
-    fi
-
-    # # Add Weaved restore back into rachel-scripts.sh
-    # # Clean rachel-scripts.sh
-    # sed -i '/Weaved/d' $rachelScriptsFile
-    # # Write restore commands to rachel-scripts.sh
-    # sudo sed -i '10 a # Restore Weaved configs, if needed' $rachelScriptsFile
-    # sudo sed -i '11 a echo \$(date) - Checking Weaved install' $rachelScriptsFile
-    # sudo sed -i '12 a if [[ -d '$rachelRecoveryDir'/Weaved ]] && [[ `ls /usr/bin/Weaved*.sh 2>/dev/null | wc -l` == 0 ]]; then' $rachelScriptsFile
-    # sudo sed -i '13 a echo \$(date) - Weaved backup files found but not installed, recovering now' $rachelScriptsFile
-    # sudo sed -i '14 a mkdir -p /etc/weaved/services #Weaved' $rachelScriptsFile
-    # sudo sed -i '15 a cp '$rachelRecoveryDir'/Weaved/Weaved*.conf /etc/weaved/services/' $rachelScriptsFile
-    # sudo sed -i '16 a cp '$rachelRecoveryDir'/Weaved/*.sh /usr/bin/' $rachelScriptsFile
-    # sudo sed -i '17 a reboot #Weaved' $rachelScriptsFile
-    # sudo sed -i '18 a fi #Weaved' $rachelScriptsFile
-
     # Add battery monitoring start line 
     if [[ -f $rachelScriptsDir/batteryWatcher.sh ]]; then
         # Clean rachel-scripts.sh
@@ -1640,12 +1445,39 @@ EOF
         printGood "Done."
     fi
 
+    # Check/enable ESP module
+    if [[ -f $rachelScriptsDir/checker.php ]]; then
+        echo; printStatus "Add ESP startup code"
+        sed -i '$e echo "# start rachel-esp checker"' $rachelScriptsFile
+        sed -i '$e echo "echo \\$(date) - Starting checker.php for rachel-esp"' $rachelScriptsFile
+        sed -i '$e echo "service esp start"' $rachelScriptsFile
+        printGood "Done."
+    fi
+
     # Check for disable wifi flag
     echo; printStatus "Added check to disable wifi"
     sed -i '$e echo "\# Check if we should disable wifi"' $rachelScriptsFile
     sed -i '$e echo "echo \\$(date) - Checking if we should disable wifi"' $rachelScriptsFile
     sed -i '$e echo "if [[ -f '$rachelScriptsDir'/disable_wifi ]]; then sleep 5; ifconfig wlan0 down; echo \\"Wifi disabled\\"; fi"' $rachelScriptsFile
     printGood "Done."
+
+    # Check for KA Lite module
+    if [[ -d $kaliteDir ]]; then
+        # Delete previous setup commands from /etc/rc.local (not used anymore)
+        sudo sed -i '/ka-lite/d' /etc/rc.local
+        sudo sed -i '/sleep/d' /etc/rc.local
+        # Delete previous setup commands from the $rachelScriptsFile
+        sudo sed -i '/ka-lite/d' $rachelScriptsFile
+        sudo sed -i '/kalite/d' $rachelScriptsFile
+        sudo sed -i '/sleep/d' $rachelScriptsFile
+        echo; printStatus "Setting up KA Lite to start at boot..."
+        # Start KA Lite at boot time
+        sudo sed -i '$e echo "# Start kalite at boot time"' $rachelScriptsFile
+        sed -i '$e echo "echo \\$(date) - Starting kalite"' $rachelScriptsFile
+        sudo sed -i '$e echo "sleep 15 #kalite"' $rachelScriptsFile
+        sudo sed -i '$e echo "service ka-lite start #kalite"' $rachelScriptsFile
+        printGood "Done."
+    fi
 
     # Add RACHEL script complete line
     sed -i '$e echo "echo \\$(date) - RACHEL startup completed"' $rachelScriptsFile
@@ -1721,6 +1553,9 @@ repairKalite(){
 }
 
 repairBugs(){
+    # Check/update package repo
+    changePackageRepo
+    
     # Update rachel folder structure
     updateRachelFolders
 
@@ -1728,11 +1563,20 @@ repairBugs(){
     updateModuleNames
 
     # Update to the latest contentshell
-    installPkgUpdates
+    # installPkgUpdates
     checkContentShell
 
     # Update KA Lite root directory location
     kaliteLocationUpdate
+
+    # Check soft links for kalite content files
+    rm -f $kaliteDir/content_khan_*.sqlite
+    rm -f $kaliteDir/database/content_khan_*.sqlite
+    ln -s $rachelWWW/modules/en-kalite/content_khan_en.sqlite $kaliteDir/database/content_khan_en.sqlite 2>/dev/null
+    ln -s $rachelWWW/modules/es-kalite/content_khan_es.sqlite $kaliteDir/database/content_khan_es.sqlite 2>/dev/null
+    ln -s $rachelWWW/modules/fr-kalite/content_khan_fr.sqlite $kaliteDir/database/content_khan_fr.sqlite 2>/dev/null
+    touch $rachelPartition/kaliteUpdate
+    kaliteCheckFiles
 
     # Add local content module
     echo; printStatus "Adding the local content module."
@@ -1750,7 +1594,7 @@ repairBugs(){
     # restart kiwix
     /root/rachel-scripts/rachelKiwixStart.sh
 
-    # Fixing issue with 10.10.10.10 redirect and sleep times
+    # Rebuild rachelStartup.sh file
     repairRachelScripts
 
     # There is one miconfigured index.htmlf that needs to be fixed on the harddrive
@@ -1789,44 +1633,37 @@ installPkgUpdates(){
             currentDir=$(pwd)
             if [[ internet="1" ]]; then
                 echo; printStatus "Downloading stem module."
-                wget -c $stemURL -O $currentDir/$stemPkg
+                cd $rachelPartition/offlinepkgs
+                wget -c $stemURL -O $stemPkg
             fi
-            echo "\n" | pecl install $currentDir/$stemPkg
+            echo "\n" | pecl install $stemPkg
             echo '; configuration for php stem module' > /etc/php5/conf.d/stem.ini
             echo 'extension=stem.so' >> /etc/php5/conf.d/stem.ini
         fi
     }
     mv /etc/init/procps.conf /etc/init/procps.conf.old 2>/dev/null # otherwise quite a lot of pkgs won't install
-    for i in $(echo $gpgKeys); do $GPGKEY$i; done
-    if [[ internet="1" ]]; then
-        if [[ $osName="precise" ]]; then
+    echo; printStatus "Updating pgp keys."
+    for i in $(echo $gpgKeys); do $GPGKEY$i 2>/dev/null; done
+    echo; printStatus "Updating packages."
+    if [[ $internet == 1 ]]; then
+        if [[ $osName == "precise" ]]; then
             apt-get update; apt-get -y install python-software-properties; apt-add-repository -y ppa:relan/exfat
         fi
         if [[ -d $rachelPartition ]]; then
-            mkdir -p $rachelPartition/offlinepkgs; cd $rachelPartition/offlinepkgs
+            mkdir -p $rachelPartition/offlinepkgs/precise $rachelPartition/offlinepkgs/trusty; cd $rachelPartition/offlinepkgs
         else
-            mkdir -p $installTmpDir/offlinepkgs; cd $installTmpDir/offlinepkgs
+            mkdir -p $rachelPartition/offlinepkgs/precise $rachelPartition/offlinepkgs/trusty; cd $installTmpDir/offlinepkgs
         fi
         apt-get update
-        if [[ $osName == "precise" ]]; then
-            apt-get download $debPrecisePackageList
-        elif [[ $osName == "trusty" ]]; then
-            apt-get download $debTrustyPackageList
-        else
-            apt-get download $debPrecisePackageList
-        fi
+        downloadPackages
         pkgInstaller
-    elif [[ -d $rachelPartition/offlinepkgs ]]; then
-        cd $rachelPartition/offlinepkgs
+    elif [[ -d $dirContentOffline/offlinepkgs ]]; then
+        echo $osName
+        if [[ $osName == "trusty" ]]; then cd $dirContentOffline/offlinepkgs/trusty; else cd $dirContentOffline/offlinepkgs/precise; fi
         pkgInstaller
     else
         printError "Packages not found for installation."
     fi
-}
-
-installOSUpdates(){
-    cd $dirContentOffline/offlinepkgs
-    dpkg -i *.deb
 }
 
 usbRecovery(){
@@ -1842,40 +1679,23 @@ usbRecovery(){
     # Add runonce.sh script that will run on reboot
     sed "s,%dirContentOffline%,$dirContentOffline,g;s,%rachelWWW%,$rachelWWW,g;s,%stemPkg%,$stemPkg,g;s,%gitContentShellCommit%,$gitContentShellCommit,g;s,%rachelLogDir%,$rachelLogDir,g;s,%rachelLogFile%,$rachelLogFile,g;s,%rachelPartition%,$rachelPartition,g" > $rachelPartition/runonce.sh << 'EOF'
 #!/bin/bash
-rachelPartition="%rachelPartition%"
-dirContentOffline="%rachelPartition%"
-rachelWWW="%rachelWWW%"
-stemPkg="%stemPkg%"
-gitContentShellCommit="%gitContentShellCommit%"
-rachelLogDir="%rachelLogDir%"
-rachelLogFile="%rachelLogFile%"
-rachelLog="$rachelLogDir/$rachelLogFile"
+. /media/RACHEL/cap-rachel-configure.sh --source-only
 exec 1>> $rachelLog 2>&1
 echo "[+] Starting USB Recovery runonce script - $(date)"
+# Run rachel startup script repair
+repairRachelScripts
+# Run kalite check
+kaliteCheckFiles
 # Copy latest cap-rachel-configure.sh script to /root
 echo; echo "[*] Copying USB version of cap-rachel-configure.sh to /root"
 cp $rachelPartition/cap-rachel-configure.sh /root/
 chmod +x /root/cap-rachel-configure.sh
-# Install OS updates (some needed for the new contentshell)
-echo; echo "[*] Installing OS updates."
-cd $dirContentOffline/offlinepkgs
-dpkg -i *.deb
-# Install kalite sqlite database(s)
-#echo; echo "[*] If available, installing kalite sqlite databases."
-#if [[ -f $dirContentOffline/kalitedb/content_khan_en.sqlite ]]; then cp $dirContentOffline/kalitedb/content_khan_en.sqlite /root/.kalite/database/; fi
-#if [[ -f $dirContentOffline/kalitedb/content_khan_es.sqlite ]]; then cp $dirContentOffline/kalitedb/content_khan_es.sqlite /root/.kalite/database/; fi
-#if [[ -f $dirContentOffline/kalitedb/content_khan_fr.sqlite ]]; then cp $dirContentOffline/kalitedb/content_khan_fr.sqlite /root/.kalite/database/; fi
-#if [[ -f $dirContentOffline/kalitedb/data.sqlite ]]; then cp $dirContentOffline/kalitedb/data.sqlite /root/.kalite/database/; fi
 # Add symlinks - when running the Recovery USB, symlinks are not permitted on FAT partitions, so we have to create them after recovery runs
-echo; echo "[*] Add symlink for en-local_content."
-ln -s $rachelWWW/modules/en-local_content/rachel-index.php $rachelWWW/modules/en-local_content/index.htmlf
-echo; echo "[*] Add symlinks for .kalite admin directory."
-ln -s $rachelWWW/modules/en-kalite/content_khan_en.sqlite $rachelPartition/.kalite/content_khan_en.sqlite
-ln -s $rachelWWW/modules/en-kalite/content_khan_es.sqlite $rachelPartition/.kalite/content_khan_es.sqlite
-ln -s $rachelWWW/modules/en-kalite/content_khan_fr.sqlite $rachelPartition/.kalite/content_khan_fr.sqlite
+echo; echo "[+] Add symlink for en-local_content."
+ln -s $rachelWWW/modules/en-local_content/rachel-index.php $rachelWWW/modules/en-local_content/index.htmlf 2>/dev/null
 # Update to the latest contentshell
-echo; echo "[*] Updating to latest contentshell."
-cd $dirContentOffline/contentshell
+echo; echo "[+] Updating to latest contentshell."
+cd $rachelPartition/contentshell
 cp -rf ./* $rachelWWW/ # overwrite current content with contentshell
 cp -rf ./.git $rachelWWW/ # copy over GitHub files
 mv /etc/init/procps.conf /etc/init/procps.conf.old 2>/dev/null # otherwise quite a pkgs won't install
@@ -1883,8 +1703,8 @@ rm -f $rachelWWW/en_all.sh $rachelWWW/en_justice.sh $rachelWWW/modules/ka-lite $
 pear clear-cache 2>/dev/null
 pecl info stem 
 if [[ $? == 0 ]]; then 
-    echo; "[*] Installing the stem module."
-    printf "\n" | pecl install $dirContentOffline/offlinepkgs/$stemPkg
+    echo; echo "[+] Installing the stem module."
+    printf "\n" | pecl install $rachelPartition/offlinepkgs/$stemPkg
     # Add support for stem extension
     echo '; configuration for php stem module' > /etc/php5/conf.d/stem.ini
     echo 'extension=stem.so' >> /etc/php5/conf.d/stem.ini
@@ -1894,13 +1714,13 @@ else
 fi
 # Check KA Lite admin directory location
 # If /root/.kalite is not a symlink, move KA Lite database to hard drive for speed increase and to prevent filling up the eMMC with user data
-echo; printStatus "Checking that .kalite directory lives on hard disk"
+echo; echo "[+] Checking that .kalite directory lives on hard disk"
 if [[ ! -L /root/.kalite ]]; then
-    echo; "[+] Need to move .kalite from eMMC to hard disk"
-    kalite stop
-    echo; "[+] Before copying KA Lite folder - here is an 'ls' of $rachelPartition"
+    echo; echo "[*] Need to move .kalite from eMMC to hard disk"
+    sudo kalite stop
+    echo; echo "[*] Before copying KA Lite folder - here is an 'ls' of $rachelPartition"
     ls -la $rachelPartition
-    echo; "[+] Copying primary (.kalite) and backup (.kalite-backup) directory to $rachelPartition"
+    echo; echo "[+] Copying primary (.kalite) and backup (.kalite-backup) directory to $rachelPartition"
     if [[ -d $rachelPartition/.kalite ]]; then
         rm -rf $rachelPartition/.kalite-backup
         mv $rachelPartition/.kalite $rachelPartition/.kalite-backup
@@ -1909,13 +1729,13 @@ if [[ ! -L /root/.kalite ]]; then
         cp -r /root/.kalite $rachelPartition/.kalite-backup
     fi
     mv /root/.kalite $rachelPartition/
-    echo; "[+] After copying KA Lite folder - $rachelPartition (should list folders .kalite and .kalite-backup)"
+    echo; echo "[*] After copying KA Lite folder - $rachelPartition (should list folders .kalite and .kalite-backup)"
     ls -la $rachelPartition
-    echo; "[+] Symlinking /root/.kalite to /media/RACHEL/.kalite"
+    echo; echo "[+] Symlinking /root/.kalite to /media/RACHEL/.kalite"
     ln -s $rachelPartition/.kalite /root/.kalite
-    echo; "[+] Symlinking complete - /root"
+    echo; echo "[+] Symlinking complete - /root"
 else
-    echo; "[+] .kalite directory is located on the hard disk"
+    echo; echo "[+] .kalite directory is located on the hard disk"
 fi
 # Update Kiwix version
 cat /var/kiwix/application.ini | grep ^Version | cut -d= -f2 > /etc/kiwix-version
@@ -1927,10 +1747,10 @@ mv $rachelPartition/rachelinstaller-version /etc/rachelinstaller-version
 echo "[+] Completed USB Recovery runonce script - $(date)"
 # Add header/date/time to install log file
 timestamp=$(date +"%b-%d-%Y-%H%M%Z")
-sudo mv $rachelLog $rachelLogDir/rachel-runonce-$timestamp.log
-# Reboot
+mv $rachelLog $rachelLogDir/rachel-runonce-$timestamp.log
+# Remove self; reboot
 rm -- "$0"
-sleep 10; shutdown -h now
+sleep 5; shutdown -r now
 EOF
 }
 
@@ -2003,10 +1823,10 @@ updateRachelFolders(){
     if [[ -f /root/createUSB.sh ]]; then mv /root/createUSB.sh $rachelScriptsDir/; fi
     # Move gpt.backup
     if [[ -f /root/gpt.backup ]]; then mv /root/gpt.backup $rachelScriptsDir/; fi
-    # Move weaved folder
-    if [[ -d /root/weaved_software ]]; then mv /root/weaved_software $rachelScriptsDir/; fi
     # Move rachelKiwixStart script
     if [[ -f /root/rachelKiwixStart.sh ]]; then mv /root/rachelKiwixStart.sh $rachelScriptsDir/; fi
+    # Remove weaved folder
+    rm -rf /root/weaved_software $rachelScriptsDir/weaved_software 
 }
 
 contentModuleListInstall(){
@@ -2015,7 +1835,6 @@ contentModuleListInstall(){
         [[ -z $m ]] && continue    # skip blanks
         m=${m#"."}                 # remove leading dot (download but hidden (later))
         echo; printStatus "Downloading $m"
-
         # it is faster without zip unless we're going to dev
         # (i.e. LAN or USB)
         if [[ $RSYNCDIR == $rsyncOnline ]]; then
@@ -2023,20 +1842,18 @@ contentModuleListInstall(){
         else
             rsync -av --del $RSYNCDIR/rachelmods/$m $rachelWWW/modules/
         fi
-
         commandStatus
         printGood "Done."
     done < $1
 }
 
 buildRACHEL(){
-
     # figure out which language we're doing
     case $1 in
         "" )
             echo "Usage: bash "`basename $0`" .modules_file [ rsync source ]"
             echo "       .modules files in $rachelWWW/scripts or current directory ("`pwd`")"
-            echo "       rsync source: dev, jeremy, jfield, actual hostname/ip, OR usb"
+            echo "       rsync source: dev, jeremy, jfield, usb, OR actual hostname/ip"
             exit 1
             ;;
         * )
@@ -2045,7 +1862,6 @@ buildRACHEL(){
             shift
             ;;
     esac
-
     # figure out which server we're doing
     case $1 in
         dev | "" )
@@ -2060,28 +1876,30 @@ buildRACHEL(){
             RSYNCDIR="rsync://192.168.1.6"
             ;;
         usb )
+            echo; printStatus "Here is list of your current partitions and their mountpoints (if applicable):"
+            lsblk|grep -v mmc|grep -v sda
             echo; printQuestion "What is the location of your content folder (for example, /media/usb)? "; read dirContentOffline
-            if [[ ! -d $dirContentOffline ]]; then
-                echo; printError "The folder location does not exist!  Sorry, ensure the usb drive is mounted (type 'df -h')"
+            grep -qs " $dirContentOffline " /proc/mounts
+            if [[ $? != 0 ]]; then
+                echo; printError "The folder location does not exist!  Connect a USB drive and try again."
                 rm -rf $installTmpDir $rachelTmpDir
                 exit 1
             fi
             offlineVariables
-            RSYNCDIR="$1"
+            RSYNCDIR="$dirContentOffline"
             ;;
         * )
             offlineVariables
             RSYNCDIR="rsync://$1"
             ;;
     esac
-
     echo; printStatus "Starting RACHEL build script"
     echo "Building CAP with file: $modulesFile"
     echo "Using rsync source: $RSYNCDIR"
 
     # fix known RACHEL bugs
-# jfield checked - none of this is needed after a Recovery USB method 3 (format)
-#    echo; repairBugs
+    # jfield checked - none of this is needed after a Recovery USB method 3 (format)
+    # echo; repairBugs
 
     echo; printStatus "Installing fresh contentshell"
     freshContentShell
@@ -2144,6 +1962,9 @@ buildRACHEL(){
     # install esp for remote service
     echo; printStatus "Installing RACHEL esp"
     installESP
+
+    # ensure rachelStartup.sh is accurate
+    repairRachelScripts
 
     # update RACHEL installer version
     echo $(cat /etc/rachelinstaller-version | cut -d_ -f1)-$(date +%Y%m%d.%H%M) > /etc/rachelinstaller-version
@@ -2230,8 +2051,7 @@ uninstallESP(){
 # Loop to redisplay main menu
 whatToDo(){
     echo; printQuestion "What would you like to do next?"
-    # echo "1)Base Install  2)Install/Upgrade KALite  3)Install Kiwix  4)Install Default Weaved Services  5)Install Weaved Service  6)Add Module  7)Add Language  8)Update Modules  9)Utilities  10)Exit"
-    echo "1)Base Install  2)Install/Upgrade KALite  3)Install Kiwix  4)Install ESP  5)Add Module  6)Add Language  7)Update Modules  8)Utilities  9)Exit"
+    echo "1)Base Install  2)Install/Upgrade KALite  3)Install Kiwix  4)Install ESP  5)Add Module  6)Add Multiple Modules  7)Update Modules  8)Utilities  9)Exit"
 }
 
 # Interactive mode menu
@@ -2240,16 +2060,13 @@ interactiveMode(){
     echo "  - [Base-Install] of RACHEL on a raw CAP (completely erases any content)"
     echo "  - [Install-Upgrade-KALite]"
     echo "  - [Install-Kiwix]"
-    # echo "  - [Install-Default-Weaved-Services] installs the default CAP Weaved services for ports 22, 80, 8080"
-    # echo "  - [Install-Weaved-Service] adds a Weaved service to an online account you provide during install"
     echo "  - [Install-ESP]"
     echo "  - [Add-Module] lists current available modules; installs one at a time"
-    echo "  - [Add-Language] installs all modules of a language (does not install KA Lite or full Wikipedia)"
+    echo "  - [Add-Multiple-Modules] installs groups of modules"
     echo "  - [Update-Modules] updates the currently installed modules"
     echo "  - Other [Utilities]"
     echo "    - Install a battery monitor that cleanly shuts down this device with less than 3% battery"
     echo "    - Download RACHEL content to stage for OFFLINE installs"
-    echo "    - Backup or Uninstall Weaved services"
     echo "    - Repair an install of a CAP after a firmware upgrade"
     echo "    - Repair a KA Lite assessment file location"
     echo "    - Repairs of general bug fixes"
@@ -2258,8 +2075,7 @@ interactiveMode(){
     echo "    - Testing script"
     echo "  - [Exit] the installation script"
     echo
-    # select menu in "Initial-Install" "Install-Upgrade-KALite" "Install-Kiwix" "Install-Default-Weaved-Services" "Install-Weaved-Service" "Add-Module" "Add-Language" "Update-Modules" "Utilities" "Exit"; do
-    select menu in "Base-Install" "Install-Upgrade-KALite" "Install-Kiwix" "Install-ESP" "Add-Module" "Add-Language" "Update-Modules" "Utilities" "Exit"; do
+    select menu in "Base-Install" "Install-Upgrade-KALite" "Install-Kiwix" "Install-ESP" "Add-Module" "Add-Multiple-Modules" "Update-Modules" "Utilities" "Exit"; do
             case $menu in
             Base-Install)
             newInstall
@@ -2267,7 +2083,6 @@ interactiveMode(){
 
             Install-Upgrade-KALite)
             kaliteSetup
-#            downloadKAContent
             echo; printGood "Login using wifi at http://192.168.88.1:8008 and register device."
             echo "After you register, click the new tab called 'Manage', then 'Videos' and download all the missing videos."
             repairRachelScripts
@@ -2285,35 +2100,15 @@ interactiveMode(){
             whatToDo
             ;;
 
-            # Install-Default-Weaved-Services)
-            # if [[ $internet != "1" ]]; then
-            #     echo; printError "You must be online the internet to register this device with Weaved."
-            #     exit 1
-            # else
-            #     echo; printQuestion "This process will remove any installed Weaved services; do you want to continue? (y/N) "; read REPLY
-            #     if [[ $REPLY =~ ^[yY][eE][sS]|[yY]$ ]]; then
-            #         uninstallAllWeavedServices; sleep 2
-            #         installDefaultWeavedServices
-            #         backupWeavedService
-            #     fi
-            # fi
-            # whatToDo
-            # ;;
-
-            # Install-Weaved-Service)
-            # installWeavedService
-            # backupWeavedService
-            # whatToDo
-            # ;;
-
             Install-ESP)
             installESP
+            repairRachelScripts
             whatToDo
             ;;
 
             Add-Module)
             updateModuleNames
-            contentModuleInstall
+            addModule
             kaliteCheckFiles
             # update rachelKiwixStart.sh
             createKiwixRepairScript
@@ -2322,11 +2117,11 @@ interactiveMode(){
             whatToDo
             ;;
 
-            Add-Language)
+            Add-Multiple-Modules)
             updateModuleNames
-            installPkgUpdates
+            # installPkgUpdates
             checkContentShell
-            contentLanguageInstall
+            addMultipleModules
             kaliteCheckFiles
             # update rachelKiwixStart.sh
             createKiwixRepairScript
@@ -2350,17 +2145,16 @@ interactiveMode(){
             echo; printQuestion "What utility would you like to use?"
             echo "  - [Install-Battery-Watcher] monitors battery and shutdowns the device with less than 3% battery"
             echo "  - [Enable-Wifi] enables the wifi access point (if disabled)"
-            echo "  - [Disable-Wifi] disables the wifi instantly and on reboot"
+            echo "  - [Disable-Wifi] disables the wifi instantly AND persistently on reboot"
             echo "  - [Disable-Reset-Button] removes the ability to reset the device by use of the reset button"
             echo "  - [Download-OFFLINE-Content] to stage for OFFLINE (i.e. local) RACHEL installs"
-            # echo "  - [Backup-Weaved-Services] backs up configs and restores them if they are not found on boot"
-            # echo "  - [Uninstall-Weaved-Service] removes Weaved services, one at a time"
-            # echo "  - [Uninstall-ALL-Weaved-Services] removes ALL Weaved services"
+            echo "  - [Download-KA-Contentpacks] to download & install KA Lite contentpacks"
             echo "  - [Uninstall-ESP] removes ESP service"
             echo "  - [Update-Content-Shell] updates the RACHEL contentshell from GitHub"
+            echo "  - [KA-Lite-Diagnostics] displays diangostic info on the KA Lite install"
+            echo "  - [Repair-KA-Lite] repairs KA Lite's mislocation of the assessment file; runs 'kalite manage setup' as well"
             echo "  - [Repair-Kiwix-Library] rebuilds the Kiwix Library"
             echo "  - [Repair-Firmware] repairs an install of a CAP after a firmware upgrade"
-            echo "  - [Repair-KA-Lite] repairs KA Lite's mislocation of the assessment file; runs 'kalite manage setup' as well"
             echo "  - [Repair-Bugs] provides general bug fixes (run when requested)"
             echo "  - [Sanitize] and prepare CAP for delivery to customer"
             echo "  - [Change-Package-Repo] allows you to change where in the world your packages are pulled from"
@@ -2368,8 +2162,7 @@ interactiveMode(){
             echo "  - [Testing] script"
             echo "  - Return to [Main Menu]"
             echo
-            # select util in "Install-Battery-Watcher" "Enable-Wifi" "Disable-Wifi" "Disable-Reset-Button" "Download-OFFLINE-Content" "Backup-Weaved-Services" "Uninstall-Weaved-Service" "Uninstall-ALL-Weaved-Services" "Update-Content-Shell" "Repair-Kiwix-Library" "Repair-Firmware" "Repair-KA-Lite" "Repair-Bugs" "Sanitize" "Change-Package-Repo" "Check-MD5" "Test" "Main-Menu"; do
-            select util in "Install-Battery-Watcher" "Enable-Wifi" "Disable-Wifi" "Disable-Reset-Button" "Download-OFFLINE-Content" "Uninstall-ESP" "Update-Content-Shell" "Repair-Kiwix-Library" "Repair-Firmware" "Repair-KA-Lite" "Repair-Bugs" "Sanitize" "Change-Package-Repo" "Check-MD5" "Test" "Main-Menu"; do
+            select util in "Install-Battery-Watcher" "Enable-Wifi" "Disable-Wifi" "Disable-Reset-Button" "Download-OFFLINE-Content" "Download-KA-Contentpacks" "Uninstall-ESP" "Update-Content-Shell" "KA-Lite-Diagnostics" "Repair-KA-Lite" "Repair-Kiwix-Library" "Repair-Firmware" "Repair-Bugs" "Sanitize" "Change-Package-Repo" "Check-MD5" "Test" "Main-Menu"; do
                 case $util in
                     Install-Battery-Watcher)
                     installBatteryWatch
@@ -2399,38 +2192,31 @@ interactiveMode(){
                     break
                     ;;
 
+                    Download-KA-Contentpacks)
+                    downloadKAContentPacks
+                    kaliteCheckFiles
+                    break
+                    ;;
+
                     Uninstall-ESP)
                     uninstallESP
                     break
                     ;;
 
-                    # Backup-Weaved-Services)
-                    # backupWeavedService
-                    # break
-                    # ;;
-
-                    # Uninstall-Weaved-Service)
-                    # uninstallWeavedService
-                    # break
-                    # ;;
-
-                    # Uninstall-ALL-Weaved-Services)
-                    # echo; printError "This uninstaller will completely remove Weaved from your CAP."
-                    # echo; printQuestion "Do you still wish to continue?"
-                    # read -p "    Enter (y/N) " REPLY
-                    # if [[ $REPLY =~ ^[Yy]$ ]]; then
-                    #     uninstallAllWeavedServices
-                    #     backupWeavedService
-                    # else
-                    #     printError "Uninstall cancelled."
-                    # fi
-                    # break
-                    # ;;
-
                     Update-Content-Shell)
                     echo; printStatus "Updating the RACHEL content shell."
-                    installPkgUpdates
+                    # installPkgUpdates
                     checkContentShell
+                    break
+                    ;;
+
+                    KA-Lite-Diagnostics)
+                    kaliteDiagnostic
+                    break
+                    ;;
+
+                    Repair-KA-Lite)
+                    repairKalite
                     break
                     ;;
 
@@ -2444,11 +2230,6 @@ interactiveMode(){
 
                     Repair-Firmware)
                     repairFirmware
-                    break
-                    ;;
-
-                    Repair-KA-Lite)
-                    repairKalite
                     break
                     ;;
 
