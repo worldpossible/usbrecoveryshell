@@ -4,15 +4,15 @@ Description
 This USB will set the LED lights, install the saved partitions to the emmc, and then run 1 of 3 scenarios which we call METHODs. Which METHOD runs is determined by the configuration file called "update.sh". Open a text editor and modify the variable "METHOD" to 1 of 3 options outlined below. A log file is stored on the USB (called update.log). It should provide more detailed information when you encounter problems. The name of the wireless access point installed is called "RACHEL".
 
 HowTo
-- Follow the instruction here:
+1. Follow the instruction here:
 http://rachel.golearn.us/wiki/mdwiki.html#!rachel-usb-recovery.md
 
-- Image a RACHEL Recovery USB using an image here:
+2. Image a RACHEL Recovery USB using an image here:
 https://drive.google.com/drive/u/1/folders/0ByHHOxPhKBGafkFYTFIzX2M1cmhPcVU1WjhtMWtrN0xvS2MyZnZ4V0Z4MFFJSmVzejNrU00
 
-- Setup your RACHEL-Plus with the latest OS updates/software (NOTE:  modules do not get imaged)
+3. Setup your RACHEL-Plus with the latest OS updates/software (NOTE:  modules do not get imaged)
 
-- Follow the instructions below to create a RACHEL Recovery USB:
+4. Follow the instructions below to create a RACHEL Recovery USB:
 http://rachel.golearn.us/wiki/mdwiki.html#!rachel-create-custom-images.md
 
 LED Status Codes Explained
