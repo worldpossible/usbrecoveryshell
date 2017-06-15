@@ -1,11 +1,12 @@
 #!/bin/bash
 #
 # Original Author : Lu Ken (bluewish.ken.lu@****l.com)
-# Modified by : Sam @ Hackers for Charity (hackersforcharity.org) and World Possible (worldpossible.org)
+# Modified by : Sam @ Hackers for Charity (hackersforcharity.org) 
+#    and World Possible (worldpossible.org)
 #
-# USB CAP Multitool
+# RACHEL Recovery USB
 # Description: This is the first script to run when the CAP starts up
-# It will set the LED lights and setup the emmc and hard drive
+# and boots from USB. It will set the LED lights and setup the emmc and hard drive.
 #
 # LED Status:
 #    - During script:  Wireless breathe and 3G solid
@@ -28,28 +29,29 @@
 #        Copy content shell to /media/RACHEL/rachel
 #
 # Stage RACHEL files on USB using the following commands:
-#	cd <USB-Drive-Root>
-#	git clone https://github.com/rachelproject/contentshell.git contentshell
+#	cd <USB-Drive-Root>/rachel-files/staging
+#	Copy any files/folders you want on the CAP after imaging to this folder.
+#   Files will be on the CAP post recovery in the /media/RACHEL/staging folder.
 #
-firmwareVersion="2.2.10"
-usbCreated="20170517.0156"
-usbVersion="20170517"
+method="1" # 1=Recovery (DEFAULT), 2=Imager, 3=Format
+firmwareVersion="1.2.16-rooted"
+usbCreated="20170613.2237"
+usbVersion="20170613"
 timestamp=$(date +"%b-%d-%Y-%H%M%Z")
 scriptRoot="/boot/efi"
-method="1" # 1=Recovery (DEFAULT), 2=Imager, 3=Format
 rachelPartition="/media/RACHEL"
 
 commandStatus(){
 	export exitCode="$?"
 	if [[ $exitCode == 0 ]]; then
 		echo "Command status:  OK"
-		$scriptRoot/led_control.sh breath off
-		$scriptRoot/led_control.sh issue off
-		$scriptRoot/led_control.sh normal on
+		$scriptRoot/led_control.sh breath off &> /dev/null
+		$scriptRoot/led_control.sh issue off &> /dev/null
+		$scriptRoot/led_control.sh normal on &> /dev/null
 	else
 		echo "Command status:  FAIL"
-		$scriptRoot/led_control.sh breath off
-		$scriptRoot/led_control.sh issue on
+		$scriptRoot/led_control.sh breath off &> /dev/null
+		$scriptRoot/led_control.sh issue on &> /dev/null
 	fi
 }
 
@@ -64,25 +66,29 @@ backupGPT(){
 }
 
 updateCore(){
-	echo; echo "[*] Mounting /dev/sda3"
+	echo "[*] Mounting /dev/sda3"
 	mkdir -p $rachelPartition
 	mount /dev/sda3 $rachelPartition
-	echo; echo "[*] Copying RACHEL contentshell files to /dev/sda3 (RACHEL web root)"
+	echo "[*] Copying RACHEL contentshell files to /dev/sda3 (RACHEL web root)"
 	cp -r $scriptRoot/rachel-files/contentshell $rachelPartition/rachel
 	chmod +x $rachelPartition/rachel/*.shtml
-	echo; echo "[*] Copying RACHEL contentshell files to /dev/sda3 (backup)"
+	echo "[*] Copying RACHEL contentshell files to /dev/sda3 (backup)"
 	cp -r $scriptRoot/rachel-files/contentshell $rachelPartition/
 	chmod +x $rachelPartition/contentshell/*.shtml
-	echo; echo "[*] Copying KA Lite admin directory to /dev/sda3."
-	cp -r $scriptRoot/rachel-files/kalite-admin-directory $rachelPartition/.kalite
-	echo; echo "[*] Copying RACHEL packages for offline update to /dev/sda3"
+	# echo "[*] Copying KA Lite admin directory to /dev/sda3."
+	# cp -r $scriptRoot/rachel-files/kalite-admin-directory $rachelPartition/.kalite
+	echo "[*] Copying RACHEL packages for offline update to /dev/sda3"
 	cp -r $scriptRoot/rachel-files/offlinepkgs $rachelPartition/
-	echo; echo "[*] Running phase 1 updates"
+	echo "[*] Running phase 1 updates"
+	echo "[+] Staging updated cap-rachel-configure.sh script"
 	cp $scriptRoot/rachel-files/cap-rachel-configure.sh $rachelPartition/cap-rachel-configure.sh
 	chmod +x $rachelPartition/cap-rachel-configure.sh
+	echo "[+] Running cap-rachel-configure.sh --usbrecovery"
 	bash $rachelPartition/cap-rachel-configure.sh --usbrecovery &> /dev/null
 	# Copy rachelinstaller version to disk
+	echo $usbCreated > $rachelPartition/rachelbuilddate
 	echo $usbVersion > $rachelPartition/rachelinstaller-version
+	echo; echo "[+] Core update complete"
 }
 
 checkForStagedFiles(){
@@ -90,23 +96,25 @@ checkForStagedFiles(){
 	if [[ $(ls -A $scriptRoot/rachel-files/staging 2>/dev/null) ]]; then
 		cp -r $scriptRoot/rachel-files/staging/* $rachelPartition/staging/
 	fi
+	echo "[+] Done."
 }
 
 exec 3>&1 4>&2
 trap 'exec 2>&4 1>&3' 0 1 2 3
 exec 1> $scriptRoot/update.log 2>&1
 
-echo; echo ">>>>>>>>>>>>>>> RACHEL Recovery USB - Version $usbversion - Started $(date) <<<<<<<<<<<<<<<"
-echo "RACHEL/CAP Firmware Build:  $version"
+echo; echo ">>>>>>>>>>>>>>> RACHEL Recovery USB - Version $usbVersion - Started $(date) <<<<<<<<<<<<<<<"
+echo "RACHEL/CAP Firmware Build:  $firmwareVersion"
+echo "RACHEL Recovery USB Build Date:  $usbCreated"
 echo "Bash Version:  $(echo $BASH_VERSION)"
-echo "Multitool configured to run method:  $method"
+echo "Recovery USB configured to run method:  $method"
 echo " -- 1=Recovery (DEFAULT), 2=Imager, 3=Format"
 
-echo; echo "[*] Configuring LEDs."
-$scriptRoot/led_control.sh normal off
-$scriptRoot/led_control.sh breath on
-#$scriptRoot/led_control.sh issue on
-$scriptRoot/led_control.sh 3g on
+echo; echo "[*] Updating LEDs."
+$scriptRoot/led_control.sh normal off &> /dev/null
+$scriptRoot/led_control.sh breath on &> /dev/null
+#$scriptRoot/led_control.sh issue on &> /dev/null
+$scriptRoot/led_control.sh 3g on &> /dev/null
 echo "[+] Done."
 
 echo; echo "[*] Method $method will now execute"
@@ -133,7 +141,7 @@ if [[ $method != 4 ]]; then
 	# Copying contentshell and other package files to the CAP
 	echo; echo "[*] Updating core files/folders"
 	updateCore
-	echo; echo "[+] Core update complete"
+	commandStatus
 	echo; echo "[*] If needed, copying staged files from USB to CAP"
 	checkForStagedFiles
 	commandStatus
@@ -159,9 +167,11 @@ else
 	umount /tmp/cap
 	sleep 2
 	rmdir /tmp/cap
-	$scriptRoot/led_control.sh breath off
-	$scriptRoot/led_control.sh normal on
-	$scriptRoot/led_control.sh 3g off
+	echo; echo "[*] Updating LEDs."
+	$scriptRoot/led_control.sh breath off &> /dev/null
+	$scriptRoot/led_control.sh normal on &> /dev/null
+	$scriptRoot/led_control.sh 3g off &> /dev/null
+	echo "[+] Completed KA Lite folder move, shutting down."
 	shutdown -h now
 fi
 
@@ -169,7 +179,8 @@ fi
 #echo; echo "[*] Copying log files to root of USB"
 #cp -rf /var/log $scriptRoot/
 sync
-$scriptRoot/led_control.sh 3g off
+echo; echo "[*] Updating LEDs."
+$scriptRoot/led_control.sh 3g off &> /dev/null
 echo "[+] Done."
 
 echo; echo ">>>>>>>>>>>>>>> RACHEL Recovery USB - Completed $(date) <<<<<<<<<<<<<<<"

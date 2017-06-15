@@ -1,7 +1,7 @@
 #!/bin/bash
 # FILE: cap-rachel-configure.sh
 # ONELINER Download/Install: sudo wget https://raw.githubusercontent.com/rachelproject/rachelplus/master/cap-rachel-configure.sh -O /root/cap-rachel-configure.sh; bash cap-rachel-configure.sh
-# OFFLINE BUILDS:  Run the Download-Offline-Content script in the Utilities menu.
+# OFFLINE BUILDS:  Run the Download-Offline-Content script in the Advanced-Settings menu.
 
 # COMMON VARIABLES - Change as needed
 dirContentOffline="/media/usbhd-sdb1" # Enter directory of downloaded RACHEL content for offline install (e.g. I mounted my external USB on my CAP but plugging the external USB into and running the command 'fdisk -l' to find the right drive, then 'mkdir /media/RACHEL-Content' to create a folder to mount to, then 'mount /dev/sdb1 /media/RACHEL-Content' to mount the USB drive.)
@@ -20,7 +20,7 @@ osVersion=$(lsb_release -ds)
 # osVersion=$(grep DISTRIB_RELEASE /etc/lsb-release | cut -d"=" -f2)
 # osVersion=$(awk -F '=' '/^VERSION_ID=/ {print $2}' /etc/os-release 2>&-)
 # To get current version - date +%Y%m%d.%H%M
-scriptVersion=20170516.2339
+scriptVersion=20170612.2355
 timestamp=$(date +"%b-%d-%Y-%H%M%Z")
 internet="1" # Enter 0 (Offline), 1 (Online - DEFAULT)
 rachelLogDir="/var/log/rachel"
@@ -34,7 +34,7 @@ rachelScriptsFile="$rachelScriptsDir/rachelStartup.sh"
 rachelScriptsLog="/var/log/rachel/rachel-scripts.log"
 kaliteUser="root"
 kaliteDir="/root/.kalite" # Installed as user 'root'
-kaliteContentDir="$rachelPartition/kacontent"
+kaliteContentDir="$rachelPartition/.kalite/content"
 kaliteMajorVersion="0.17"
 kaliteCurrentVersion="$kaliteMajorVersion.1-0ubuntu1"
 kaliteInstaller=ka-lite-bundle_"$kaliteCurrentVersion"_all.deb
@@ -57,9 +57,6 @@ errorCode="0"
 buildHashList(){
     cat > $installTmpDir/hashes.md5 << 'EOF'
 d17736647f2d94f7c7dd428d19a64237 ka-lite-bundle_0.17.1-0ubuntu1_all.deb
-ef4e2741b145a21179eed83867cb531a ka-lite-bundle_0.17.0-0ubuntu1_all.deb
-13c447a2e78ad67a06caaded00d01701 ka-lite-bundle_0.17.0-0ubuntu2_all.deb
-34fb1b8df07db49de04bc5faaae6497d ka-lite-bundle_0.17.0-0ubuntu3_all.deb
 b61fdc3937aa226f34f685ba0bc29db1 kiwix-0.9-linux-i686.tar.bz2
 df6216ba851819d9c3d0208d3ea639df kiwix-0.9-linux-x86_64.tar.bz2
 EOF
@@ -187,11 +184,11 @@ osCheck(){
         osName="precise"
     elif [[ "$osID" == "ubuntu" ]]; then
         # osVersion=$(awk -F '["=]' '/^VERSION_ID=/ {print $3}' /etc/os-release 2>&- | cut -d'.' -f1)
-        printGood "${osVersion} $(uname -m) Detected."
+        printGood "Hardware OS:  ${osVersion} $(uname -m)"
         osName=$(lsb_release -cs)
         # osName=$(grep DISTRIB_CODENAME /etc/lsb-release | cut -d"=" -f2)
     elif [[ "$osID" == "debian" ]]; then
-        printGood "${osVersion} $(uname -m) Detected."
+        printGood "Hardware OS:  ${osVersion} $(uname -m)"
         debianVersion=$(cat /etc/debian_version | cut -d"." -f1)
         if [[ $debianVersion="7" ]]; then
             osName="wheezy"
@@ -202,20 +199,50 @@ osCheck(){
 }
 
 capCheck(){
-    if [[ $(cat /etc/hostname) == "WRTD-303N-Server" ]]; then
-        os=cap_v1
+    buildDate=$(date -r /boot)
+    if [[ $(cat /etc/hostname) == "WRTD-303N-Server" ]] && [[ $(sgdisk -p /dev/sda | grep preloaded | grep "20.0 GiB") ]]; then
+        os="CAPv1_OldHD"
+        printGood "RACHEL Hardware Build:  ${os} (${buildDate})"
         osName="precise"
-        KiwixInstaller="$kiwixInstallerCAPv1"
+        kiwixInstallerFile="$kiwixInstallerCAPv1"
+    elif [[ $(cat /etc/hostname) == "WRTD-303N-Server" ]]; then
+        os="CAPv1_NewHD"
+        printGood "RACHEL Hardware Build:  ${os} (${buildDate})"
+        osName="precise"
+        kiwixInstallerFile="$kiwixInstallerCAPv1"
     elif [[ $(cat /etc/hostname) == "WAPD-235N-Server" ]]; then
-        os=cap_v2
+        os="CAPv2"
+        printGood "RACHEL Hardware Build/Date:  ${os} (${buildDate})"
         osName="trusty"
-        KiwixInstaller="$kiwixInstallerCAPv2"
+        kiwixInstallerFile="$kiwixInstallerCAPv2"
     else
         echo; printError "This isn't a CAP; sorry, I can not continue."
         echo; exit 1
     fi
 }
 
+rachelPartitionCheck(){
+    df -h | grep sda3 | grep RACHEL >/dev/null 2>&1
+    if [[ $? != 0 ]]; then 
+        echo; printError "WARNING:  RACHEL partition is *not* mounted."
+        echo; printStatus "Attempting to mount the hard drive partition for /media/RACHEL"
+        # echo; printStatus "Mounting /dev/sda1 to /media/preloaded"
+        # mount /dev/sda1 /media/preloaded
+        # if [[ df -h | grep sda1 | grep preloaded ]]; then printGood "Mounted successfully."; else printError "Mounting failed."; mountFail=1; fi 
+        # echo; printStatus "Mounting /dev/sda2 to /media/uploaded"
+        # mount /dev/sda2 /media/uploaded
+        # if [[ df -h | grep sda2 | grep uploaded ]]; then printGood "Mounted successfully."; else printError "Mounting failed."; mountFail=1; fi 
+        echo; printStatus "Mounting /dev/sda3 to /media/RACHEL"
+        mount /dev/sda3 /media/RACHEL
+        if [[ $(df -h | grep sda3 | grep RACHEL) ]]; then printGood "Mounted successfully."; else printError "Mounting failed."; mountFail=1; fi
+        if [[ $mountFail == 1 ]]; then
+            echo; printError "Run 'dmesg' to view CAP error log."
+            echo "You can also check the RACHEL configure script log file (noted below) for other possible errors."
+            echo "Exiting...script can not continue."
+            cleanup
+        fi
+    fi
+}
 
 onlineVariables(){
     GPGKEY="apt-key adv --keyserver keyserver.ubuntu.com --recv-keys "
@@ -235,7 +262,7 @@ onlineVariables(){
     GITCLONERACHELCONTENTSHELL="git clone https://github.com/rachelproject/contentshell contentshell"
     RSYNCDIR="$rsyncOnline"
     KALITEINSTALL="wget -c $kalitePrimaryDownload -O $installTmpDir/$kaliteInstaller"
-    KIWIXINSTALL="wget -c $wgetOnline/downloads/public_ftp/old/z-holding/$KiwixInstaller -O $rachelTmpDir/$KiwixInstaller"
+    KIWIXINSTALL="wget -c $wgetOnline/downloads/public_ftp/old/z-holding/$kiwixInstallerFile -O $rachelTmpDir/$kiwixInstallerFile"
     DOWNLOADCONTENTSCRIPT="wget -c $gitRachelPlus/scripts"
     CONTENTWIKI="wget -c http://download.kiwix.org/portable/wikipedia/$FILENAME -O $rachelTmpDir/$FILENAME"
     DOWNLOADSCRIPT="wget $gitRachelPlus/cap-rachel-configure.sh -O $installTmpDir/cap-rachel-configure.sh"
@@ -257,7 +284,7 @@ offlineVariables(){
     RACHELBRANDLOGOCAPTIVE="rsync -avhz --progress $dirContentOffline/contentshell/art/RACHELbrandLogo-captive.png ."
     HFCBRANDLOGOCAPTIVE="rsync -avhz --progress $dirContentOffline/contentshell/art/HFCbrandLogo-captive.jpg ."
     WORLDPOSSIBLEBRANDLOGOCAPTIVE="rsync -avhz --progress $dirContentOffline/contentshell/art/World-Possible-Logo-300x120.png ."
-    GITCLONERACHELCONTENTSHELL=""
+    GITCLONERACHELCONTENTSHELL="rsync -avhz --progress $dirContentOffline/contentshell ."
     RSYNCDIR="$dirContentOffline"
     KALITEINSTALL="rsync -avhz --progress $dirContentOffline/$kaliteInstaller $installTmpDir/$kaliteInstaller"
     KIWIXINSTALL=""
@@ -377,7 +404,7 @@ installKiwix(){
     echo; printStatus "Installing kiwix."
     $KIWIXINSTALL
     if [[ $internet == "0" ]]; then cd $dirContentOffline; else cd $rachelTmpDir; fi
-    tar -C /var -xjvf $KiwixInstaller
+    tar -C /var -xjvf $kiwixInstallerFile
     chown -fR root:root /var/kiwix
     # Make content directory
     mkdir -p /media/RACHEL/kiwix
@@ -524,24 +551,40 @@ downloadOfflineContent(){
     printGood "Done."
 
     # Downloading Github repo:  kalite
+    downloadKAInstaller(){
+        # Downloading current version of KA Lite
+        echo; printStatus "Downloading KA Lite Version $kaliteCurrentVersion"
+        $KALITEINSTALL
+        commandStatus
+        mv $installTmpDir/$kaliteInstaller $dirContentOffline/$kaliteInstaller
+    }
     echo; printStatus "Checking/downloading:  KA Lite"
     if [[ -f $dirContentOffline/$kaliteInstaller ]]; then
         # Checking user provided file MD5 against known good version
         checkMD5 $dirContentOffline/$kaliteInstaller
         if [[ $md5Status == 0 ]]; then
-            # Downloading current version of KA Lite
-            echo; printStatus "Downloading KA Lite Version $kaliteCurrentVersion"
-            $KALITEINSTALL
-            commandStatus
-            mv $installTmpDir/$kaliteInstaller $dirContentOffline/$kaliteInstaller
+            downloadKAInstaller
         fi
+    else
+        downloadKAInstaller
     fi
-    commandStatus
+    commandStatus    
     printGood "Done."
+
+    # # Downloading KA Lite contentpacks
+    # echo; printStatus "Downloading/updating KA Lite contentpacks"
+    # for i in `ls $dirContentOffline/rachelmods/*-kalite/rachel-index.php`; do
+    # if [[ $i =~ ([a-z]{2})-kalite ]]; then
+    #     lang=${BASH_REMATCH[1]}
+    #     echo; printStatus "Downloading KA Lite contentpack: $lang"
+    #     wget -c $kalitePrimaryContent/$lang.zip -O $dirContentOffline/rachelmods/$lang-kalite/$lang.zip
+    # fi
+    # commandStatus    
+    # printGood "Done."
 
     # Downloading kiwix
     echo; printStatus "Downloading/updating kiwix."
-    wget -c $wgetOnline/downloads/public_ftp/old/z-holding/$KiwixInstaller -O $dirContentOffline/$KiwixInstaller
+    wget -c $wgetOnline/downloads/public_ftp/old/z-holding/$kiwixInstallerFile -O $dirContentOffline/$kiwixInstallerFile
     commandStatus
     printGood "Done."
 
@@ -575,7 +618,7 @@ downloadOfflineContent(){
             Kannada) echo "#Kannada" >> $rachelScriptsDir/rsyncInclude.list; echo "kn-*" >> $rachelScriptsDir/rsyncInclude.list ;;
             Português) echo "#Portuguese" >> $rachelScriptsDir/rsyncInclude.list; echo "pt-*" >> $rachelScriptsDir/rsyncInclude.list ;;
             Hindi) echo "#Hindi" >> $rachelScriptsDir/rsyncInclude.list; echo "hi-*" >> $rachelScriptsDir/rsyncInclude.list ;;
-            None) sleep 0 ;;
+            None) noInstall=1; break ;;
             *) printError "That really isn't an answer I am looking for..." ;;
         esac
         echo; printStatus "Language modules included:"
@@ -589,6 +632,7 @@ downloadOfflineContent(){
         echo; printQuestion "What additional language would you like to select?"
         echo "1)Arabic  2)Deutsch  3)English  4)Español  5)Français  6)Português  7)Hindi  8)None"
     done
+    if [[ $noInstall == 1 ]]; then echo; printError "Alright, skipping content download."; break; fi
     buildRsyncModuleExcludeList
     MODULELIST=$(rsync --list-only --exclude-from "$rachelScriptsDir/rsyncExclude.list" --include-from "$rachelScriptsDir/rsyncInclude.list" --exclude '*' $RSYNCDIR/rachelmods/ | awk '{print $5}' | tail -n +2)
     echo; printStatus "Rsyncing core RACHEL content from $RSYNCDIR"
@@ -796,7 +840,6 @@ checkContentShell(){
     if [[ ! -d $rachelWWW ]]; then
         printStatus "RACHEL content shell does not exist at $rachelWWW."
         printStatus "Cloning the RACHEL content shell from GitHub into $(pwd)"
-        rm -rf contentshell # in case of previous failed install
         $GITCLONERACHELCONTENTSHELL
         cd contentshell
         cp -rf ./* $rachelWWW/
@@ -804,7 +847,6 @@ checkContentShell(){
     else
         if [[ ! -d $rachelWWW/.git ]]; then
             echo; printStatus "$rachelWWW exists but it wasn't installed from git; installing RACHEL content shell from GitHub."
-            rm -rf contentshell # in case of previous failed install
             $GITCLONERACHELCONTENTSHELL
             cd contentshell
             cp -rf ./* $rachelWWW/ # overwrite current content with contentshell
@@ -906,7 +948,7 @@ addMultipleModules(){
         esac
     done
     # get content
-    if [[ $option == "exit" ]]; then printError "Exiting on user request."; fi
+    if [[ $option == "exit" ]]; then printError "Exiting on user request."; break; fi
     if [[ $option == "custom" ]]; then
         echo; printStatus "Here is list of your current partitions and their mountpoints (if applicable):"
         lsblk|grep -v mmc|grep -v sda
@@ -1083,7 +1125,8 @@ kaliteSetup(){
     printStatus "KA Lite content directory:  $kaliteContentDir"
     sed -i '/^CONTENT_ROOT/d' $kaliteSettings
     sed -i '/^DATABASES/d' $kaliteSettings
-    echo 'CONTENT_ROOT = "/media/RACHEL/kacontent"' >> $kaliteSettings
+    ## Removed the following as we now put the content and core KA folder *all* on the hard drive
+    # echo 'CONTENT_ROOT = "/media/RACHEL/kacontent"' >> $kaliteSettings
 
     # Install module for RACHEL index.php
     echo; printStatus "Syncing English KA Lite RACHEL module"
@@ -1118,8 +1161,7 @@ kaliteCheckFiles(){
     sudo kalite stop
     # clear out possible old videos taking up space
     echo; printStatus "Clearing old video content"
-    rm -rf /media/RACHEL/kacontent
-    mkdir /media/RACHEL/kacontent
+    rm -rf $rachelPartition/kacontent
     # clear out old database files
     rm -rf /root/.kalite/database/content_khan_*.sqlite
     rm -rf /root/.kalite/content_khan_*.sqlite
@@ -1143,7 +1185,7 @@ kaliteCheckFiles(){
     echo; printStatus "Symlinking all KA database module files to the actual KA Lite database folder."
     find $rachelWWW/modules/*-kalite -name "*.sqlite" -exec ln -sf {} /root/.kalite/database/ \;
     # Starting KA Lite
-    echo; sudo kalite start
+    echo; sudo kalite stop; sudo kalite start
     # Update KA Lite version
     dpkg -s ka-lite-bundle | grep ^Version | cut -d" " -f2 > /etc/kalite-version
     printGood "Done."
@@ -1538,9 +1580,10 @@ repairFirmware(){
 repairKalite(){
     echo; printStatus "Fixing KA-Lite"
     # Fixing KA-Lite 
-    cp -f /media/RACHEL/kacontent/assessmentitems.sqlite /usr/share/kalite/assessment/khan/.
+    # cp -f /media/RACHEL/kacontent/assessmentitems.sqlite /usr/share/kalite/assessment/khan/.
+    cp -f $kaliteContentDir/assessmentitems.sqlite /usr/share/kalite/assessment/khan/.
     sed -i '/assessmentitems.sqlite/d' /root/.kalite/settings.py
-    # Turn loggin off for compatibility
+    # Turn logging off for compatibility
     exec &>/dev/tty
     # Restart kalite to use the new assessmentitems.sqlite location
     echo; kalite stop
@@ -1672,6 +1715,7 @@ usbRecovery(){
     noCleanup="1"
     dirContentOffline="/media/RACHEL"
     offlineVariables
+    capCheck >/dev/null 2>&1
     # Update rachel folder structure
     updateRachelFolders
     # Update modules names to new structure
@@ -1741,8 +1785,12 @@ fi
 cat /var/kiwix/application.ini | grep ^Version | cut -d= -f2 > /etc/kiwix-version
 # Update KA Lite version
 dpkg -s ka-lite-bundle | grep ^Version | cut -d" " -f2 > /etc/kalite-version
-# Update RACHEL installer version
+# Update RACHEL USB installer version
 mv $rachelPartition/rachelinstaller-version /etc/rachelinstaller-version
+# Update RACHEL Hardware build version
+echo $os > /etc/rachelbuild
+# Update RACHEL Hardware build date
+echo $buildDate > /etc/rachelbuilddate
 # FINISHED
 echo "[+] Completed USB Recovery runonce script - $(date)"
 # Add header/date/time to install log file
@@ -2048,23 +2096,51 @@ uninstallESP(){
     printGood "Done."
 }
 
+updateConfigureScript(){
+    if [[ $internet == "1" ]]; then
+        $DOWNLOADSCRIPT >&2
+        commandStatus
+        if [[ -s $installTmpDir/cap-rachel-configure.sh ]]; then
+            mv $installTmpDir/cap-rachel-configure.sh /root/cap-rachel-configure.sh
+            chmod +x /root/cap-rachel-configure.sh
+            versionNum=$(cat /root/cap-rachel-configure.sh |grep ^scriptVersion|head -n 1|cut -d"=" -f2|cut -d" " -f1)
+            printGood "Success! Your script was updated to $versionNum; RE-RUN the script to use the new version."
+        else
+            printStatus "Fail! Check the log file for more info on what happened:  $rachelLog"
+            echo
+        fi
+    else
+        if [[ ! -f $dirContentOffline/cap-rachel-configure.sh ]]; then
+            echo; printError "You don't have a copy of the rachel script in your offline content location."
+            echo; exit 1
+        fi
+        $DOWNLOADSCRIPT >&2
+        commandStatus
+        chmod +x /root/cap-rachel-configure.sh
+        versionNum=$(cat /root/cap-rachel-configure.sh |grep ^scriptVersion|head -n 1|cut -d"=" -f2|cut -d" " -f1)
+        echo; printGood "Your script was updated to $versionNum"
+        echo "RE-RUN the script to use the new version."
+           # echo; printError "You need to be connected to the internet to update this script."
+    fi
+}
+
 # Loop to redisplay main menu
 whatToDo(){
     echo; printQuestion "What would you like to do next?"
-    echo "1)Base Install  2)Install/Upgrade KALite  3)Install Kiwix  4)Install ESP  5)Add Module  6)Add Multiple Modules  7)Update Modules  8)Utilities  9)Exit"
+    echo "1)Check for udpates  2)Install/Upgrade KALite  3)Install Kiwix  4)Install ESP  5)Add Module  6)Add Multiple Modules  7)Update Modules  8)Advanced Settings  9)Exit"
 }
 
 # Interactive mode menu
 interactiveMode(){
     echo; printQuestion "What you would like to do:"
-    echo "  - [Base-Install] of RACHEL on a raw CAP (completely erases any content)"
+    echo "  - [Check-for-Updates] for configure script, all installed modules, KA Lite, "
     echo "  - [Install-Upgrade-KALite]"
     echo "  - [Install-Kiwix]"
     echo "  - [Install-ESP]"
     echo "  - [Add-Module] lists current available modules; installs one at a time"
     echo "  - [Add-Multiple-Modules] installs groups of modules"
     echo "  - [Update-Modules] updates the currently installed modules"
-    echo "  - Other [Utilities]"
+    echo "  - Other [Advanced-Settings]"
     echo "    - Install a battery monitor that cleanly shuts down this device with less than 3% battery"
     echo "    - Download RACHEL content to stage for OFFLINE installs"
     echo "    - Repair an install of a CAP after a firmware upgrade"
@@ -2075,10 +2151,22 @@ interactiveMode(){
     echo "    - Testing script"
     echo "  - [Exit] the installation script"
     echo
-    select menu in "Base-Install" "Install-Upgrade-KALite" "Install-Kiwix" "Install-ESP" "Add-Module" "Add-Multiple-Modules" "Update-Modules" "Utilities" "Exit"; do
+    select menu in "Check-for-Updates" "Install-Upgrade-KALite" "Install-Kiwix" "Install-ESP" "Add-Module" "Add-Multiple-Modules" "Update-Modules" "Advanced-Settings" "Exit"; do
             case $menu in
-            Base-Install)
-            newInstall
+            Check-for-Updates)
+            # cap-rachel-configure.sh
+            updateConfigureScript
+            # Modules
+            updateModuleNames
+            contentUpdate
+            # KA
+            kaliteSetup
+            echo; printGood "Login using wifi at http://192.168.88.1:8008 and register device."
+            echo "After you register, click the new tab called 'Manage', then 'Videos' and download all the missing videos."
+            printGood "KA Lite Install Complete."
+            # Check for the more common errors
+            repairBugs
+            whatToDo
             ;;
 
             Install-Upgrade-KALite)
@@ -2141,8 +2229,9 @@ interactiveMode(){
             whatToDo
             ;;
 
-            Utilities)
-            echo; printQuestion "What utility would you like to use?"
+            Advanced-Settings)
+            echo; printQuestion "What utility would you like to use (CAUTION: For ADVANCED users)?"
+            echo "  - [Base-Install] of RACHEL on a raw (non-RACHEL) CAP (WARNING: Completely erases any content!)"
             echo "  - [Install-Battery-Watcher] monitors battery and shutdowns the device with less than 3% battery"
             echo "  - [Enable-Wifi] enables the wifi access point (if disabled)"
             echo "  - [Disable-Wifi] disables the wifi instantly AND persistently on reboot"
@@ -2162,8 +2251,12 @@ interactiveMode(){
             echo "  - [Testing] script"
             echo "  - Return to [Main Menu]"
             echo
-            select util in "Install-Battery-Watcher" "Enable-Wifi" "Disable-Wifi" "Disable-Reset-Button" "Download-OFFLINE-Content" "Download-KA-Contentpacks" "Uninstall-ESP" "Update-Content-Shell" "KA-Lite-Diagnostics" "Repair-KA-Lite" "Repair-Kiwix-Library" "Repair-Firmware" "Repair-Bugs" "Sanitize" "Change-Package-Repo" "Check-MD5" "Test" "Main-Menu"; do
+            select util in "Base-Install" "Install-Battery-Watcher" "Enable-Wifi" "Disable-Wifi" "Disable-Reset-Button" "Download-OFFLINE-Content" "Download-KA-Contentpacks" "Uninstall-ESP" "Update-Content-Shell" "KA-Lite-Diagnostics" "Repair-KA-Lite" "Repair-Kiwix-Library" "Repair-Firmware" "Repair-Bugs" "Sanitize" "Change-Package-Repo" "Check-MD5" "Test" "Main-Menu"; do
                 case $util in
+                    Base-Install)
+                    newInstall
+                    ;;
+
                     Install-Battery-Watcher)
                     installBatteryWatch
                     repairRachelScripts
@@ -2384,6 +2477,7 @@ else
             # Check OS and CAP version
             osCheck
             capCheck
+            rachelPartitionCheck
             if [[ $# -lt $((OPTIND)) ]]; then
                 echo; echo "$IAM -b argument(s) missing...needs 2!" >&2
                 echo; echo "Usage: `basename $0` -b '(en | es | fr) [ rsync host ]'" >&2
@@ -2404,6 +2498,7 @@ else
             # Check OS and CAP version
             osCheck
             capCheck
+            rachelPartitionCheck
             # Determine the operational mode - ONLINE or OFFLINE
             opMode
             # Build the hash list 
@@ -2419,6 +2514,7 @@ else
             # Check OS and CAP version
             osCheck
             capCheck
+            rachelPartitionCheck
             # Determine the operational mode - ONLINE or OFFLINE
             opMode
             # Build the hash list 
@@ -2433,6 +2529,7 @@ else
             # Check OS and CAP version
             osCheck
             capCheck
+            rachelPartitionCheck
             # Determine the operational mode - ONLINE or OFFLINE
             opMode
             repairBugs
@@ -2443,6 +2540,7 @@ else
             # Check OS and CAP version
             osCheck
             capCheck
+            rachelPartitionCheck
             # Determine the operational mode - ONLINE or OFFLINE
             opMode
             testingScript
@@ -2454,31 +2552,8 @@ else
             osCheck
             capCheck
             # Determine the operational mode - ONLINE or OFFLINE
-            opMode
-            if [[ $internet == "1" ]]; then
-                $DOWNLOADSCRIPT >&2
-                commandStatus
-                if [[ -s $installTmpDir/cap-rachel-configure.sh ]]; then
-                    mv $installTmpDir/cap-rachel-configure.sh /root/cap-rachel-configure.sh
-                    chmod +x /root/cap-rachel-configure.sh
-                    versionNum=$(cat /root/cap-rachel-configure.sh |grep ^scriptVersion|head -n 1|cut -d"=" -f2|cut -d" " -f1)
-                    printGood "Success! Your script was updated to $versionNum; RE-RUN the script to use the new version."
-                else
-                    printStatus "Fail! Check the log file for more info on what happened:  $rachelLog"
-                    echo
-                fi
-            else
-                if [[ ! -f $dirContentOffline/cap-rachel-configure.sh ]]; then
-                    echo; printError "You don't have a copy of the rachel script in your offline content location."
-                    echo; exit 1
-                fi
-                $DOWNLOADSCRIPT >&2
-                commandStatus
-                chmod +x /root/cap-rachel-configure.sh
-                versionNum=$(cat /root/cap-rachel-configure.sh |grep ^scriptVersion|head -n 1|cut -d"=" -f2|cut -d" " -f1)
-                printGood "Success! Your script was updated to $versionNum; RE-RUN the script to use the new version."
-#                    echo; printError "You need to be connected to the internet to update this script."
-            fi
+            opMode        
+            updateConfigureScript
             exit 1
             ;;
         (z) # UPDATE to BETA - Update the RACHEL configure script to the latest BETA build.
