@@ -10,9 +10,7 @@
 SYS_GPIO_ROOT="/sys/class/gpio"
 
 usage() {
-    echo "
-Usage: `basename $1` [normal|breath|issue|3g] [on|off]
-"
+    echo "Usage: `basename $1` [normal|breath|issue|3g] [on|off]"
 }
 
 check_parameter() {
